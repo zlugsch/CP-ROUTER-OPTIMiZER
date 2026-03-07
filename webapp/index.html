@@ -1,0 +1,3574 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimalizace Svozových Tras</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #151b2d;
+            --bg-tertiary: #1e2740;
+            --accent-primary: #00d4aa;
+            --accent-secondary: #0099ff;
+            --text-primary: #ffffff;
+            --text-secondary: #a8b2d1;
+            --text-muted: #606987;
+            --border: #2a3550;
+            --warning: #ffa726;
+            --danger: #ef5350;
+            --success: #66bb6a;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            width: 380px;
+            min-width: 380px;
+            max-width: 380px;
+            grid-column: 1;
+        }
+
+        .sidebar-header {
+            padding: 28px 24px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+            flex-shrink: 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 28px;
+            width: 100%;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--bg-tertiary);
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent-primary);
+            background: rgba(0, 212, 170, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .upload-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .stat-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .input-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .input-field {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 212, 170, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--bg-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .map-container {
+            position: relative;
+            background: var(--bg-primary);
+            width: 100%;
+            height: 100vh;
+            grid-column: 2;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-tertiary);
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(21, 27, 45, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 280px;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+        }
+
+        .map-overlay.visible {
+            display: block;
+        }
+
+        .overlay-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .route-info {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        .info-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .route-list {
+            margin-top: 16px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .route-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .route-item:hover {
+            border-color: var(--accent-primary);
+            transform: translateX(4px);
+        }
+
+        .route-item.selected {
+            border-color: var(--accent-primary);
+            background: rgba(0, 212, 170, 0.1);
+        }
+
+        .route-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .route-number {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+
+        .route-stops {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .route-time {
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: rgba(239, 83, 80, 0.1);
+            border: 1px solid var(--danger);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--danger);
+            font-size: 13px;
+            margin-top: 12px;
+        }
+
+        .success-message {
+            background: rgba(102, 187, 106, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--success);
+            font-size: 13px;
+            margin-top: 12px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            opacity: 0.3;
+            margin-bottom: 20px;
+        }
+
+        .empty-text {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .empty-hint {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .total-stats {
+            background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+            border: 1px solid var(--accent-primary);
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .total-stats.visible {
+            display: block;
+        }
+
+        .total-stats-title {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .hidden {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+            border-radius: 8px !important;
+        }
+
+        .leaflet-popup-tip {
+            background: var(--bg-secondary) !important;
+        }
+        
+        .leaflet-popup-content {
+            color: #ffffff !important;
+            margin: 8px 12px !important;
+        }
+        
+        .leaflet-popup-close-button {
+            color: #ffffff !important;
+        }
+        
+        .popup-content {
+            color: #ffffff;
+            min-width: 150px;
+        }
+        
+        .popup-content small {
+            color: #aaaaaa;
+        }
+        
+        .route-category {
+            font-size: 10px;
+            color: var(--accent-primary);
+            background: rgba(0, 212, 170, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            display: inline-block;
+        }
+        
+        .stat-mini {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        
+        .stat-mini strong {
+            color: var(--text-primary);
+        }
+        
+        #filter-stats {
+            margin-top: 12px;
+            padding: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .depot-marker {
+            background: transparent;
+            border: none;
+        }
+        
+        .depot-info {
+            background: rgba(255, 87, 34, 0.1);
+            border: 1px solid #ff5722;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 11px;
+        }
+        
+        .popup-content hr {
+            border: none;
+            border-top: 1px solid #444;
+            margin: 8px 0;
+        }
+        
+        .multi-stop-badge {
+            background: #ff5722;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+
+        .custom-marker {
+            background: transparent;
+            border: none;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(21, 27, 45, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 1000;
+            min-width: 200px;
+        }
+
+        .legend-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .legend-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .legend-close:hover {
+            color: var(--text-primary);
+        }
+
+        .legend-section {
+            margin-bottom: 12px;
+        }
+
+        .legend-section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .legend-symbol {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-toggle-legend {
+            padding: 8px 12px;
+            font-size: 11px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 999;
+        }
+
+        .btn-toggle-legend:hover {
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        .progress-container {
+            margin: 12px 0;
+            width: 100%;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-reset {
+            padding: 6px 12px;
+            font-size: 11px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .btn-reset:hover {
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">🚛</div>
+                    <div>
+                        <div class="logo-text">RouteOptimizer</div>
+                        <div class="subtitle">Optimalizace svozových tras</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-content">
+                <div class="section">
+                    <div class="section-title">Nahrát data</div>
+                    <label class="upload-zone" for="file-upload">
+                        <input 
+                            id="file-upload"
+                            type="file" 
+                            class="file-input"
+                            accept=".xlsx,.xls"
+                        />
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">Klikněte pro výběr souboru</div>
+                        <div class="upload-hint">Excel s GPS souřadnicemi</div>
+                    </label>
+                    <div id="messages"></div>
+                </div>
+                
+                <div id="stats-section" class="section hidden">
+                    <div class="section-title">Statistiky</div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Nádoby</div>
+                            <div class="stat-value" id="stat-containers">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Trasy</div>
+                            <div class="stat-value" id="stat-routes">0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid" style="margin-top: 12px;" id="waste-stats">
+                        <div class="stat-card" style="background: rgba(0, 153, 255, 0.1); border-color: #0099ff;">
+                            <div class="stat-label">📄 Papír</div>
+                            <div class="stat-value" id="stat-paper" style="background: linear-gradient(135deg, #0099ff, #00d4aa);">0</div>
+                        </div>
+                        <div class="stat-card" style="background: rgba(255, 215, 0, 0.1); border-color: #ffd700;">
+                            <div class="stat-label">♻️ Plast</div>
+                            <div class="stat-value" id="stat-plastic" style="background: linear-gradient(135deg, #ffd700, #ffa726);">0</div>
+                        </div>
+                    </div>
+                    
+                    <div id="total-stats" class="total-stats">
+                        <div class="total-stats-title">Celkové hodnoty</div>
+                        <div class="info-row">
+                            <span class="info-label">Vzdálenost</span>
+                            <span class="info-value" id="total-distance">0 km</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Celkový čas</span>
+                            <span class="info-value" id="total-time">0 hod</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Zastávek</span>
+                            <span class="info-value" id="total-stops">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="params-section" class="section hidden">
+                    <div class="section-title">Filtry</div>
+                    <div class="controls">
+                        <div class="input-group">
+                            <label class="input-label">Typ odpadu</label>
+                            <select class="input-field" id="filterWasteType">
+                                <option value="all">Vše</option>
+                                <option value="paper">📄 Pouze Papír</option>
+                                <option value="plastic">♻️ Pouze Plast</option>
+                            </select>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Kategorie smlouvy</label>
+                            <select class="input-field" id="filterContract">
+                                <option value="all">Vše</option>
+                                <option value="mp002_new">MP002 (nový 14denní)</option>
+                                <option value="mp002d">MP002D (stávající)</option>
+                                <option value="customer_7">Zákazníci (7...)</option>
+                                <option value="other">Ostatní</option>
+                            </select>
+                        </div>
+                        
+                        <button class="btn btn-secondary" id="applyFilterBtn" style="margin-top: 8px;">
+                            🔍 Použít filtr
+                        </button>
+                        <button class="btn btn-secondary" id="resetFilterBtn" style="margin-top: 4px;">
+                            ↺ Reset filtru
+                        </button>
+                    </div>
+                    
+                    <div id="filter-stats"></div>
+                    
+                    <div id="contract-stats" style="margin-top: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 12px;"></div>
+                </div>
+                
+                <div id="settings-section" class="section hidden">
+                    <div class="section-title">Parametry tras</div>
+                    <div class="controls">
+                        <div class="input-group">
+                            <label class="input-label">🏭 Výchozí bod (depo) - GPS</label>
+                            <input type="text" class="input-field" id="depotGps" value="49.725588, 13.378361"/>
+                            <small style="color: var(--text-muted); font-size: 11px;">Formát: lat, lng</small>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Čas vysypání - standardní (s)</label>
+                            <input type="number" class="input-field" id="emptyTime" value="20"/>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Čas vysypání - zákazník (s)</label>
+                            <input type="number" class="input-field" id="emptyTimeCustomer" value="120"/>
+                            <small style="color: var(--text-muted); font-size: 11px;">Pro nádoby s přístupem do objektu</small>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Průměrná rychlost (km/h)</label>
+                            <input type="number" class="input-field" id="avgSpeed" value="20"/>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Max. zastávek na trasu</label>
+                            <input type="number" class="input-field" id="maxStops" value="100"/>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Počet vozidel</label>
+                            <input type="number" class="input-field" id="vehicleCount" value="3"/>
+                            <small style="color: var(--text-muted); font-size: 11px;">Pro rovnoměrné rozdělení tras</small>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Optimalizační algoritmus</label>
+                            <select class="input-field" id="algorithmType">
+                                <option value="fast">⚡ Rychlý (Nearest Neighbor)</option>
+                                <option value="balanced" selected>⚖️ Balanced (NN + 2-opt)</option>
+                                <option value="quality">🎯 Kvalitní (NN + 2-opt + Or-opt)</option>
+                            </select>
+                            <small style="color: var(--text-muted); font-size: 11px;">Balanced doporučeno pro většinu případů</small>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Routing provider</label>
+                            <select class="input-field" id="routingProvider">
+                                <option value="local" selected>🚀 Lokální server (GPU cuOpt)</option>
+                                <option value="osrm">🌐 OSRM veřejný (zdarma)</option>
+                                <option value="here">🗺️ HERE (přesnější, 250k/měs zdarma)</option>
+                            </select>
+                            <small style="color: var(--text-muted); font-size: 11px;" id="providerHint">
+                                GPU akcelerovaná optimalizace na lokálním serveru
+                            </small>
+                        </div>
+                        
+                        <div class="input-group hidden" id="localApiGroup">
+                            <label class="input-label">API URL</label>
+                            <input type="text" class="input-field" id="localApiUrl" value="http://localhost:8888"/>
+                        </div>
+                        
+                        <div class="input-group hidden" id="hereApiKeyGroup">
+                            <label class="input-label">HERE API klíč</label>
+                            <input type="password" class="input-field" id="hereApiKey" placeholder="Váš HERE API klíč"/>
+                            <small style="color: var(--text-muted); font-size: 11px;">
+                                <a href="https://developer.here.com/sign-up" target="_blank" style="color: var(--accent-primary);">Získat zdarma →</a>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="rajon-section" class="section hidden">
+                    <div class="section-title">Rajonizace</div>
+                    <div class="controls">
+                        <div class="input-group">
+                            <label class="input-label">Varianta</label>
+                            <select class="input-field" id="rajonVariant">
+                                <option value="1">Var. 1 - Křížové rozložení dnů</option>
+                                <option value="2">Var. 2 - Oddělení MP002</option>
+                            </select>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Svozový den (pro náhled)</label>
+                            <select class="input-field" id="collectionDay">
+                                <option value="all">Všechny dny</option>
+                                <option value="mo">Pondělí</option>
+                                <option value="tu">Úterý</option>
+                                <option value="we">Středa</option>
+                                <option value="th">Čtvrtek</option>
+                                <option value="fr">Pátek</option>
+                                <option value="sa">Sobota</option>
+                                <option value="su">Neděle</option>
+                            </select>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Týden</label>
+                            <select class="input-field" id="weekType">
+                                <option value="odd">Lichý týden</option>
+                                <option value="even">Sudý týden</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="actions-section" class="section hidden">
+                    <div class="section-title">Akce</div>
+                    <div class="controls">
+                        <button class="btn btn-primary" id="optimizeBtn">
+                            🎯 Optimalizovat trasy
+                        </button>
+                        
+                        <div id="progressContainer" class="progress-container hidden">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <div class="progress-text" id="progressText">0%</div>
+                        </div>
+                        
+                        <button class="btn btn-secondary hidden" id="exportBtn">
+                            💾 Export do Excel
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="routes-section" class="section hidden">
+                    <div class="section-title">Navržené trasy</div>
+                    <div class="route-list" id="routesList"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+            <div id="mapOverlay" class="map-overlay">
+                <div class="overlay-title">
+                    <span id="overlayTitle">Trasa</span>
+                    <button class="btn-reset" id="resetViewBtn">Zobrazit vše</button>
+                </div>
+                <div class="route-info" id="overlayContent"></div>
+            </div>
+            
+            <button class="btn-toggle-legend" id="toggleLegendBtn">📋 Legenda</button>
+            
+            <div id="legend" class="legend" style="display: none;">
+                <div class="legend-title">
+                    <span>Legenda</span>
+                    <button class="legend-close" id="closeLegendBtn">✕</button>
+                </div>
+                
+                <div class="legend-section">
+                    <div class="legend-section-title">Typ odpadu</div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="16" height="16">
+                                <rect x="2" y="2" width="12" height="12" fill="#0099ff" stroke="#fff" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>📄 Papír (modrá)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="16" height="16">
+                                <rect x="2" y="2" width="12" height="12" fill="#ffd700" stroke="#fff" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>♻️ Plast (žlutá)</span>
+                    </div>
+                </div>
+                
+                <div class="legend-section">
+                    <div class="legend-section-title">Speciální body</div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="20" height="20">
+                                <polygon points="10,2 18,18 2,18" fill="#ff5722" stroke="#fff" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>🏭 Depo (výchozí bod)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="20" height="20">
+                                <rect x="2" y="2" width="16" height="16" fill="#00d4aa" stroke="#fff" stroke-width="2"/>
+                                <circle cx="16" cy="4" r="4" fill="#ff5722" stroke="#fff" stroke-width="1"/>
+                            </svg>
+                        </div>
+                        <span>📍 Více nádob na místě</span>
+                    </div>
+                </div>
+                
+                <div class="legend-section">
+                    <div class="legend-section-title">Objem nádoby</div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="16" height="16">
+                                <rect x="2" y="2" width="12" height="12" fill="#888" stroke="#fff" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>1100 L - Čtverec</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="16" height="16">
+                                <circle cx="8" cy="8" r="6" fill="#888" stroke="#fff" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>240 L - Kruh</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="16" height="16">
+                                <path d="M 8 2 L 14 14 L 2 14 Z" fill="#888" stroke="#fff" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>660 L - Trojúhelník</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="16" height="16">
+                                <path d="M 8 2 L 14 8 L 8 14 L 2 8 Z" fill="#888" stroke="#fff" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span>120 L - Diamant</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">
+                            <svg width="16" height="16">
+                                <polygon points="8,2 9,6 13,6 10,9 11,13 8,10 5,13 6,9 3,6 7,6" fill="#888" stroke="#fff" stroke-width="1"/>
+                            </svg>
+                        </div>
+                        <span>360 L - Hvězda</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <script>
+        class RouteOptimizer {
+            constructor() {
+                this.containers = [];
+                this.filteredContainers = []; // Pro filtrovaná data
+                this.routes = [];
+                this.selectedRouteId = null;
+                this.loading = false;
+                
+                // Výchozí bod (depo) - předdefinovaná adresa
+                this.depot = { lat: 49.725588, lng: 13.378361 };
+                
+                // Parametry tras
+                this.emptyTime = 20; // Standardní čas vysypání
+                this.emptyTimeCustomer = 120; // Čas pro zákaznické nádoby
+                this.avgSpeed = 20;
+                this.maxStopsPerRoute = 100;
+                this.vehicleCount = 3;
+                this.algorithmType = 'balanced'; // fast, balanced, quality
+                this.routingProvider = 'local'; // local, osrm, here
+                this.localApiUrl = 'http://localhost:8888'; // Lokální API URL
+                this.hereApiKey = ''; // HERE API klíč
+                
+                // Filtry
+                this.filterWasteType = 'all';
+                this.filterContract = 'all';
+                
+                // Rajonizace
+                this.rajonVariant = '1';
+                this.collectionDay = 'all';
+                this.weekType = 'odd';
+                
+                this.map = null;
+                this.markers = [];
+                this.polyline = null;
+                this.depotMarker = null; // Marker pro depo
+                
+                this.initMap();
+                this.attachEventListeners();
+            }
+            
+            initMap() {
+                try {
+                    this.map = L.map('map').setView([49.725588, 13.378361], 12);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap',
+                        maxZoom: 19
+                    }).addTo(this.map);
+                    
+                    // Zobraz výchozí depo na mapě
+                    if (this.depot) {
+                        this.showDepotOnMap();
+                    }
+                    
+                    console.log('✓ Map initialized');
+                } catch (err) {
+                    console.error('Error initializing map:', err);
+                    this.showError('Chyba při inicializaci mapy: ' + err.message);
+                }
+            }
+            
+            attachEventListeners() {
+                document.getElementById('file-upload').addEventListener('change', (e) => {
+                    this.handleFileUpload(e.target.files[0]);
+                });
+                
+                // Parametry tras
+                document.getElementById('depotGps').addEventListener('change', (e) => {
+                    this.parseDepotGps(e.target.value);
+                });
+                
+                document.getElementById('emptyTime').addEventListener('change', (e) => {
+                    this.emptyTime = Number(e.target.value);
+                });
+                
+                document.getElementById('emptyTimeCustomer').addEventListener('change', (e) => {
+                    this.emptyTimeCustomer = Number(e.target.value);
+                });
+                
+                document.getElementById('avgSpeed').addEventListener('change', (e) => {
+                    this.avgSpeed = Number(e.target.value);
+                });
+                
+                document.getElementById('maxStops').addEventListener('change', (e) => {
+                    this.maxStopsPerRoute = Number(e.target.value);
+                });
+                
+                document.getElementById('vehicleCount').addEventListener('change', (e) => {
+                    this.vehicleCount = Number(e.target.value);
+                });
+                
+                document.getElementById('algorithmType').addEventListener('change', (e) => {
+                    this.algorithmType = e.target.value;
+                });
+                
+                document.getElementById('routingProvider').addEventListener('change', (e) => {
+                    this.routingProvider = e.target.value;
+                    const hereGroup = document.getElementById('hereApiKeyGroup');
+                    const localGroup = document.getElementById('localApiGroup');
+                    const providerHint = document.getElementById('providerHint');
+                    
+                    // Skryj všechny skupiny
+                    hereGroup.classList.add('hidden');
+                    localGroup.classList.add('hidden');
+                    
+                    // Zobraz relevantní skupinu a aktualizuj hint
+                    if (e.target.value === 'here') {
+                        hereGroup.classList.remove('hidden');
+                        providerHint.textContent = 'Přesnější routing, 250k požadavků/měsíc zdarma';
+                    } else if (e.target.value === 'local') {
+                        localGroup.classList.remove('hidden');
+                        providerHint.textContent = 'GPU akcelerovaná optimalizace na lokálním serveru';
+                    } else {
+                        providerHint.textContent = 'Veřejný OSRM server, může být pomalý';
+                    }
+                });
+                
+                document.getElementById('localApiUrl').addEventListener('change', (e) => {
+                    this.localApiUrl = e.target.value.trim();
+                });
+                
+                document.getElementById('hereApiKey').addEventListener('change', (e) => {
+                    this.hereApiKey = e.target.value.trim();
+                });
+                
+                // Filtry
+                document.getElementById('filterWasteType').addEventListener('change', (e) => {
+                    this.filterWasteType = e.target.value;
+                });
+                
+                document.getElementById('filterContract').addEventListener('change', (e) => {
+                    this.filterContract = e.target.value;
+                });
+                
+                document.getElementById('applyFilterBtn').addEventListener('click', () => {
+                    this.applyFilters();
+                });
+                
+                document.getElementById('resetFilterBtn').addEventListener('click', () => {
+                    this.resetFilters();
+                });
+                
+                // Rajonizace
+                document.getElementById('rajonVariant').addEventListener('change', (e) => {
+                    this.rajonVariant = e.target.value;
+                });
+                
+                document.getElementById('collectionDay').addEventListener('change', (e) => {
+                    this.collectionDay = e.target.value;
+                });
+                
+                document.getElementById('weekType').addEventListener('change', (e) => {
+                    this.weekType = e.target.value;
+                });
+                
+                // Akce
+                document.getElementById('optimizeBtn').addEventListener('click', () => {
+                    this.optimizeRoutes();
+                });
+                
+                document.getElementById('exportBtn').addEventListener('click', () => {
+                    this.exportRoutes();
+                });
+                
+                document.getElementById('resetViewBtn').addEventListener('click', () => {
+                    this.resetMapView();
+                });
+                
+                document.getElementById('toggleLegendBtn').addEventListener('click', () => {
+                    this.toggleLegend();
+                });
+                
+                document.getElementById('closeLegendBtn').addEventListener('click', () => {
+                    this.closeLegend();
+                });
+            }
+            
+            applyFilters() {
+                // Filtrování kontejnerů
+                this.filteredContainers = this.containers.filter(c => {
+                    // Filtr typu odpadu
+                    if (this.filterWasteType !== 'all' && c.wasteType !== this.filterWasteType) {
+                        return false;
+                    }
+                    
+                    // Filtr kategorie smlouvy
+                    if (this.filterContract !== 'all' && c.contractCategory !== this.filterContract) {
+                        return false;
+                    }
+                    
+                    return true;
+                });
+                
+                // Aktualizace zobrazení
+                this.displayFilteredContainersOnMap();
+                this.updateFilterStats();
+                this.showSuccess(`✓ Filtrováno: ${this.filteredContainers.length} z ${this.containers.length} nádob`);
+            }
+            
+            resetFilters() {
+                // Reset filtrů na výchozí hodnoty
+                this.filterWasteType = 'all';
+                this.filterContract = 'all';
+                
+                // Reset UI
+                document.getElementById('filterWasteType').value = 'all';
+                document.getElementById('filterContract').value = 'all';
+                
+                // Reset filtrovaných dat
+                this.filteredContainers = [...this.containers];
+                
+                // Aktualizace zobrazení
+                this.displayContainersOnMap();
+                this.updateFilterStats();
+                this.showSuccess(`✓ Filtr resetován - zobrazeno ${this.containers.length} nádob`);
+            }
+            
+            parseDepotGps(value) {
+                if (!value || value.trim() === '') {
+                    this.depot = null;
+                    this.removeDepotMarker();
+                    return;
+                }
+                
+                try {
+                    const parts = value.split(',').map(s => s.trim());
+                    const lat = parseFloat(parts[0]);
+                    const lng = parseFloat(parts[1]);
+                    
+                    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                        this.depot = { lat, lng };
+                        this.showDepotOnMap();
+                        this.showSuccess(`✓ Depo nastaveno: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                    } else {
+                        this.showError('Neplatné GPS souřadnice');
+                        this.depot = null;
+                    }
+                } catch (err) {
+                    this.showError('Chyba při parsování GPS. Použijte formát: lat, lng');
+                    this.depot = null;
+                }
+            }
+            
+            showDepotOnMap() {
+                if (!this.map || !this.depot) return;
+                
+                this.removeDepotMarker();
+                
+                // Vytvoř speciální marker pro depo
+                const depotIcon = L.divIcon({
+                    className: 'depot-marker',
+                    html: `<svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="20,2 38,38 2,38" fill="#ff5722" stroke="#fff" stroke-width="3"/>
+                        <text x="20" y="28" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">D</text>
+                    </svg>`,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 38]
+                });
+                
+                this.depotMarker = L.marker([this.depot.lat, this.depot.lng], { icon: depotIcon })
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <strong>🏭 DEPO</strong><br>
+                            Výchozí bod pro všechny trasy<br>
+                            <small>${this.depot.lat.toFixed(6)}, ${this.depot.lng.toFixed(6)}</small>
+                        </div>
+                    `)
+                    .addTo(this.map);
+            }
+            
+            removeDepotMarker() {
+                if (this.depotMarker) {
+                    this.map.removeLayer(this.depotMarker);
+                    this.depotMarker = null;
+                }
+            }
+            
+            displayFilteredContainersOnMap() {
+                if (!this.map) return;
+                
+                this.clearMap();
+                
+                const containersToShow = this.filteredContainers.length > 0 ? this.filteredContainers : this.containers;
+                
+                containersToShow.forEach(container => {
+                    const marker = this.createMarker(container);
+                    marker.bindPopup(this.createPopupContent(container))
+                          .addTo(this.map);
+                    this.markers.push(marker);
+                });
+                
+                if (containersToShow.length > 0) {
+                    const bounds = L.latLngBounds(containersToShow.map(c => [c.lat, c.lng]));
+                    this.map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+            
+            updateFilterStats() {
+                const statsEl = document.getElementById('filter-stats');
+                if (statsEl) {
+                    const paper = this.filteredContainers.filter(c => c.wasteType === 'paper').length;
+                    const plastic = this.filteredContainers.filter(c => c.wasteType === 'plastic').length;
+                    const mp002 = this.filteredContainers.filter(c => c.contractCategory === 'mp002_new').length;
+                    const customer = this.filteredContainers.filter(c => c.isCustomerContainer).length;
+                    
+                    statsEl.innerHTML = `
+                        Vyfiltrováno: <strong>${this.filteredContainers.length}</strong> |
+                        📄 ${paper} | ♻️ ${plastic} |
+                        MP002: ${mp002} | Zák: ${customer}
+                    `;
+                }
+            }
+            
+            toggleLegend() {
+                const legend = document.getElementById('legend');
+                const btn = document.getElementById('toggleLegendBtn');
+                
+                if (legend.style.display === 'none') {
+                    legend.style.display = 'block';
+                    btn.textContent = '✖️ Zavřít legendu';
+                } else {
+                    legend.style.display = 'none';
+                    btn.textContent = '📋 Legenda';
+                }
+            }
+            
+            closeLegend() {
+                const legend = document.getElementById('legend');
+                const btn = document.getElementById('toggleLegendBtn');
+                legend.style.display = 'none';
+                btn.textContent = '📋 Legenda';
+            }
+            
+            handleFileUpload(file) {
+                if (!file) return;
+                
+                this.loading = true;
+                this.clearMessages();
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        
+                        let sheetName = workbook.SheetNames.find(name => name === 'Nádoby') || workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        
+                        // Debug: zobraz sloupce prvního řádku
+                        if (jsonData.length > 0) {
+                            console.log('📊 Sloupce v souboru:', Object.keys(jsonData[0]));
+                        }
+                        
+                        const parsedContainers = [];
+                        jsonData.forEach((row, index) => {
+                            // GPS - podporuje různé názvy sloupců
+                            const gpsField = row.GPS || 
+                                           row['GPS poloha stanoviště'] || 
+                                           row['GPS poloha (Stanoviště)'] ||
+                                           row['GPS Poloha'] ||
+                                           row['GPS'];
+                            if (!gpsField) return;
+                            
+                            const gps = gpsField.toString().split(',').map(s => s.trim());
+                            const lat = parseFloat(gps[0]);
+                            const lng = parseFloat(gps[1]);
+                            
+                            if (!isNaN(lat) && !isNaN(lng)) {
+                                // Detekce typu odpadu
+                                const typeField = row['Typ odpadu'] || row['Název 1'] || '';
+                                const wasteType = this.detectWasteType(typeField.toString());
+                                
+                                // Objem - převod na číslo!
+                                const volume = parseInt(row['Objem'], 10) || 1100;
+                                
+                                // Smlouva a kategorie - podporuje různé názvy
+                                const contractId = row['Smlouva - ev. číslo'] || 
+                                                  row['Číslo (Smlouva)'] ||
+                                                  row['Smlouva'] ||
+                                                  row['Číslo smlouvy'] || '';
+                                const contractCategory = this.detectContractCategory(contractId.toString());
+                                
+                                // Svozový režim
+                                const collectionsPerYear = parseInt(row['Počet odvozů ročně'], 10) || 0;
+                                const oddWeek = row['Lichý týden'] || row['T1'] || '';
+                                const evenWeek = row['Sudý týden'] || row['T2'] || '';
+                                
+                                // Zákazník a poznámky - podporuje různé názvy
+                                const customer = row['Zákazník'] || 
+                                               row['Název (Zákazník)'] ||
+                                               row['Jméno zákazníka'] || '';
+                                const locationName = row['Název stanoviště'] || 
+                                                    row['Název (Stanoviště)'] ||
+                                                    row['Stanoviště'] || '';
+                                const driverNote = row['Poznámka pro řidiče'] || '';
+                                
+                                // Určení zda jde o zákaznickou nádobu (delší obsluha)
+                                const isCustomerContainer = this.isCustomerContainer(contractId, driverNote);
+                                
+                                // ID nádoby - podporuje různé názvy
+                                const containerId = row['Identifikátor nádoby'] || 
+                                                   row['Číslo nádoby'] || 
+                                                   row['ID nádoby'] ||
+                                                   `C${index}`;
+                                
+                                parsedContainers.push({
+                                    id: containerId,
+                                    lat: lat,
+                                    lng: lng,
+                                    volume: volume,
+                                    type: typeField,
+                                    wasteType: wasteType,
+                                    gps: gpsField,
+                                    // Nové vlastnosti
+                                    contractId: contractId,
+                                    contractCategory: contractCategory,
+                                    collectionsPerYear: collectionsPerYear,
+                                    oddWeek: oddWeek,
+                                    evenWeek: evenWeek,
+                                    customer: customer,
+                                    locationName: locationName,
+                                    driverNote: driverNote,
+                                    isCustomerContainer: isCustomerContainer
+                                });
+                            }
+                        });
+                        
+                        this.containers = parsedContainers;
+                        this.filteredContainers = [...parsedContainers]; // Inicializace filtrovaných dat
+                        this.updateUI();
+                        this.displayContainersOnMap();
+                        this.showSuccess(`✓ Načteno ${parsedContainers.length} nádob (${this.getWasteTypeSummary()})`);
+                        this.updateContractStats();
+                        this.loading = false;
+                    } catch (err) {
+                        this.showError(`Chyba: ${err.message}`);
+                        this.loading = false;
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+            
+            detectContractCategory(contractId) {
+                const id = contractId.toString().toUpperCase();
+                
+                if (id === 'MP002') {
+                    return 'mp002_new'; // Nový 14denní režim
+                } else if (id.includes('MP002D')) {
+                    return 'mp002d'; // Stávající režim
+                } else if (id.startsWith('ZC')) {
+                    return 'zc'; // ZC... - stávající režim
+                } else if (id.startsWith('7')) {
+                    return 'customer_7'; // 7... - zákazníci, stávající režim
+                } else {
+                    return 'other';
+                }
+            }
+            
+            isCustomerContainer(contractId, driverNote) {
+                const id = contractId.toString().toUpperCase();
+                const note = driverNote.toString().toLowerCase();
+                
+                // Zákaznické nádoby - potřebují delší čas obsluhy
+                if (id.startsWith('7')) return true;
+                if (id.includes('MP002D')) return true;
+                if (note.includes('odemknout') || note.includes('klíč') || note.includes('vstup')) return true;
+                
+                return false;
+            }
+            
+            updateContractStats() {
+                const stats = {
+                    mp002_new: this.containers.filter(c => c.contractCategory === 'mp002_new').length,
+                    mp002d: this.containers.filter(c => c.contractCategory === 'mp002d').length,
+                    customer_7: this.containers.filter(c => c.contractCategory === 'customer_7').length,
+                    zc: this.containers.filter(c => c.contractCategory === 'zc').length,
+                    other: this.containers.filter(c => c.contractCategory === 'other').length,
+                    customerContainers: this.containers.filter(c => c.isCustomerContainer).length
+                };
+                
+                // Aktualizuj statistiky v UI
+                const statsEl = document.getElementById('contract-stats');
+                if (statsEl) {
+                    statsEl.innerHTML = `
+                        <div class="stat-mini">MP002 (nový): <strong>${stats.mp002_new}</strong></div>
+                        <div class="stat-mini">MP002D: <strong>${stats.mp002d}</strong></div>
+                        <div class="stat-mini">Zákazníci (7...): <strong>${stats.customer_7}</strong></div>
+                        <div class="stat-mini">Zákaznické nádoby: <strong>${stats.customerContainers}</strong></div>
+                    `;
+                }
+            }
+            
+            detectWasteType(typeString) {
+                const type = typeString.toLowerCase();
+                if (type.includes('papír') || type.includes('papir')) {
+                    return 'paper';
+                } else if (type.includes('plast')) {
+                    return 'plastic';
+                } else {
+                    return 'other';
+                }
+            }
+            
+            getWasteTypeSummary() {
+                const paper = this.containers.filter(c => c.wasteType === 'paper').length;
+                const plastic = this.containers.filter(c => c.wasteType === 'plastic').length;
+                const other = this.containers.filter(c => c.wasteType === 'other').length;
+                
+                const parts = [];
+                if (paper > 0) parts.push(`${paper} papír`);
+                if (plastic > 0) parts.push(`${plastic} plast`);
+                if (other > 0) parts.push(`${other} ostatní`);
+                
+                return parts.join(', ');
+            }
+            
+            displayContainersOnMap() {
+                if (!this.map) return;
+                
+                this.clearMap();
+                
+                this.containers.forEach(container => {
+                    const marker = this.createMarker(container);
+                    marker.bindPopup(this.createPopupContent(container))
+                          .addTo(this.map);
+                    this.markers.push(marker);
+                });
+                
+                if (this.containers.length > 0) {
+                    const bounds = L.latLngBounds(this.containers.map(c => [c.lat, c.lng]));
+                    this.map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+            
+            createMarker(container) {
+                const color = this.getColorByWasteType(container.wasteType);
+                const icon = this.getIconByVolume(container.volume, color);
+                
+                return L.marker([container.lat, container.lng], { icon: icon });
+            }
+            
+            getColorByWasteType(wasteType) {
+                switch(wasteType) {
+                    case 'paper':
+                        return '#0099ff'; // Modrá
+                    case 'plastic':
+                        return '#ffd700'; // Žlutá
+                    default:
+                        return '#808080'; // Šedá
+                }
+            }
+            
+            getIconByVolume(volume, color) {
+                let shape, size;
+                
+                // Převod na číslo - volume může být string!
+                const vol = parseInt(volume, 10);
+                
+                // Určení tvaru a velikosti podle objemu - ZVĚTŠENÉ
+                if (vol === 1100) {
+                    shape = 'square';
+                    size = 16;
+                } else if (vol === 240) {
+                    shape = 'circle';
+                    size = 14;
+                } else if (vol === 660) {
+                    shape = 'triangle';
+                    size = 16;
+                } else if (vol === 120) {
+                    shape = 'diamond';
+                    size = 14;
+                } else if (vol === 360) {
+                    shape = 'star';
+                    size = 16;
+                } else {
+                    shape = 'circle';
+                    size = 12;
+                }
+                
+                const svg = this.createSVGShape(shape, size, color);
+                
+                return L.divIcon({
+                    className: 'custom-marker',
+                    html: svg,
+                    iconSize: [size * 2, size * 2],
+                    iconAnchor: [size, size]
+                });
+            }
+            
+            createSVGShape(shape, size, color) {
+                const strokeColor = '#ffffff';
+                const strokeWidth = 2;
+                const svgSize = size * 2;
+                
+                let pathOrShape = '';
+                
+                switch(shape) {
+                    case 'square':
+                        pathOrShape = `<rect x="${size/2}" y="${size/2}" width="${size}" height="${size}" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>`;
+                        break;
+                    
+                    case 'circle':
+                        pathOrShape = `<circle cx="${size}" cy="${size}" r="${size/2}" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>`;
+                        break;
+                    
+                    case 'triangle':
+                        const h = size * 0.866; // výška rovnostranného trojúhelníku
+                        pathOrShape = `<path d="M ${size} ${size - h/2} L ${size + size/2} ${size + h/2} L ${size - size/2} ${size + h/2} Z" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>`;
+                        break;
+                    
+                    case 'diamond':
+                        pathOrShape = `<path d="M ${size} ${size/2} L ${size + size/2} ${size} L ${size} ${size + size/2} L ${size - size/2} ${size} Z" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>`;
+                        break;
+                    
+                    case 'star':
+                        const points = [];
+                        for (let i = 0; i < 10; i++) {
+                            const angle = (Math.PI * 2 * i) / 10 - Math.PI / 2;
+                            const r = i % 2 === 0 ? size/2 : size/4;
+                            const x = size + r * Math.cos(angle);
+                            const y = size + r * Math.sin(angle);
+                            points.push(`${x},${y}`);
+                        }
+                        pathOrShape = `<polygon points="${points.join(' ')}" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>`;
+                        break;
+                }
+                
+                return `<svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg">
+                    ${pathOrShape}
+                </svg>`;
+            }
+            
+            createPopupContent(container) {
+                const wasteTypeLabel = container.wasteType === 'paper' ? '📄 Papír' : 
+                                      container.wasteType === 'plastic' ? '♻️ Plast' : 
+                                      '🗑️ Ostatní';
+                
+                const contractLabel = this.getContractLabel(container.contractCategory);
+                const customerBadge = container.isCustomerContainer ? 
+                    '<span style="color: #ffa726;">🏠 Zákaznická</span><br>' : '';
+                
+                return `
+                    <div class="popup-content">
+                        <strong>${container.id}</strong><br>
+                        ${wasteTypeLabel}<br>
+                        <strong>Objem:</strong> ${container.volume}L<br>
+                        <strong>Smlouva:</strong> ${container.contractId}<br>
+                        ${contractLabel}<br>
+                        ${customerBadge}
+                        ${container.locationName ? `<small>${container.locationName}</small><br>` : ''}
+                        ${container.driverNote ? `<small style="color: #ffa726;">📝 ${container.driverNote}</small>` : ''}
+                    </div>
+                `;
+            }
+            
+            getContractLabel(category) {
+                switch(category) {
+                    case 'mp002_new': return '<span style="color: #66bb6a;">🆕 MP002 (nový 14denní)</span>';
+                    case 'mp002d': return '<span style="color: #0099ff;">📋 MP002D (stávající)</span>';
+                    case 'customer_7': return '<span style="color: #ffa726;">🏠 Zákazník (7...)</span>';
+                    case 'zc': return '<span style="color: #9c27b0;">🏢 ZC</span>';
+                    default: return '<span style="color: #888;">Ostatní</span>';
+                }
+            }
+            
+            clearMap() {
+                this.markers.forEach(marker => this.map.removeLayer(marker));
+                this.markers = [];
+                
+                if (this.polyline) {
+                    this.map.removeLayer(this.polyline);
+                    this.polyline = null;
+                }
+            }
+            
+            calculateDistance(lat1, lng1, lat2, lng2) {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLng = (lng2 - lng1) * Math.PI / 180;
+                const a = 
+                    Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c;
+            }
+            
+            async optimizeRoutes() {
+                // Použij filtrované nebo všechny kontejnery
+                const containersToOptimize = this.filteredContainers.length > 0 ? 
+                    [...this.filteredContainers] : [...this.containers];
+                
+                if (containersToOptimize.length === 0) {
+                    this.showError('Nejdříve nahrajte data nebo upravte filtry');
+                    return;
+                }
+                
+                this.loading = true;
+                this.clearMessages();
+                document.getElementById('optimizeBtn').innerHTML = '<div class="spinner"></div> Optimalizuji...';
+                document.getElementById('optimizeBtn').disabled = true;
+                
+                // Zobraz progress bar
+                this.showProgress();
+                this.updateProgress(0, 'Příprava...');
+                
+                // Malá pauza pro UI update
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
+                try {
+                    let optimizedRoutes = [];
+                    
+                    this.updateProgress(5, 'Vytvářím trasy...');
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    
+                    if (this.rajonVariant === '2') {
+                        // Varianta 2: Oddělení MP002 do samostatných rajonů
+                        optimizedRoutes = await this.optimizeVariant2WithProgress(containersToOptimize);
+                    } else {
+                        // Varianta 1: Křížové rozložení (základní nearest neighbor)
+                        optimizedRoutes = await this.optimizeVariant1WithProgress(containersToOptimize);
+                    }
+                    
+                    this.routes = optimizedRoutes;
+                    
+                    // Hned spočítej skutečné vzdálenosti
+                    const algNames = {
+                        'fast': '⚡ Rychlý',
+                        'balanced': '⚖️ Balanced', 
+                        'quality': '🎯 Kvalitní'
+                    };
+                    
+                    const providerNames = {
+                        'local': '🚀 GPU cuOpt',
+                        'osrm': 'OSRM',
+                        'here': 'HERE'
+                    };
+                    const providerName = providerNames[this.routingProvider] || 'OSRM';
+                    this.updateProgress(70, `Počítám skutečné vzdálenosti (${providerName})...`);
+                    document.getElementById('optimizeBtn').innerHTML = '<div class="spinner"></div> Počítám trasy...';
+                    
+                    // Validace
+                    if (this.routingProvider === 'here' && !this.hereApiKey) {
+                        throw new Error('Pro použití HERE je nutné zadat API klíč');
+                    }
+                    
+                    // Volání správného routing providera
+                    if (this.routingProvider === 'local') {
+                        await this.calculateAllRoutesLocal();
+                    } else if (this.routingProvider === 'here') {
+                        await this.calculateAllRoutesHERE();
+                    } else {
+                        await this.calculateAllRoutesOSRM();
+                    }
+                    
+                    this.updateProgress(100, 'Hotovo!');
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    this.hideProgress();
+                    this.updateUI();
+                    this.showSuccess(`✓ Vytvořeno ${optimizedRoutes.length} tras [${algNames[this.algorithmType]}] via ${providerName}`);
+                    this.loading = false;
+                    document.getElementById('optimizeBtn').innerHTML = '🎯 Optimalizovat trasy';
+                    document.getElementById('optimizeBtn').disabled = false;
+                } catch (err) {
+                    this.hideProgress();
+                    this.showError(`Chyba: ${err.message}`);
+                    this.loading = false;
+                    document.getElementById('optimizeBtn').innerHTML = '🎯 Optimalizovat trasy';
+                    document.getElementById('optimizeBtn').disabled = false;
+                }
+            }
+            
+            // Varianta 1 s progress barem
+            async optimizeVariant1WithProgress(containers) {
+                const optimizedRoutes = [];
+                const unvisited = [...containers];
+                let routeNumber = 1;
+                
+                const totalContainers = unvisited.length;
+                const containersPerVehicle = Math.ceil(totalContainers / this.vehicleCount);
+                const stopsPerRoute = Math.min(this.maxStopsPerRoute, Math.ceil(containersPerVehicle / 2));
+                
+                const expectedRoutes = Math.ceil(totalContainers / stopsPerRoute);
+                
+                while (unvisited.length > 0) {
+                    const route = this.createRoute(unvisited, routeNumber, stopsPerRoute);
+                    optimizedRoutes.push(route);
+                    
+                    // Update progress (5-70% je pro vytváření tras)
+                    const progress = 5 + Math.round((routeNumber / expectedRoutes) * 65);
+                    const algText = this.algorithmType === 'fast' ? '' : 
+                                   this.algorithmType === 'balanced' ? ' + 2-opt' : ' + 2-opt + Or-opt';
+                    this.updateProgress(Math.min(progress, 70), `Trasa ${routeNumber}/${expectedRoutes}${algText}...`);
+                    
+                    // Pauza pro UI update
+                    if (routeNumber % 2 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                    
+                    routeNumber++;
+                }
+                
+                return optimizedRoutes;
+            }
+            
+            // Varianta 2 s progress barem
+            async optimizeVariant2WithProgress(containers) {
+                // Rozděl kontejnery podle kategorie
+                const mp002Containers = containers.filter(c => 
+                    c.contractCategory === 'mp002_new' || c.contractCategory === 'mp002_old'
+                );
+                const otherContainers = containers.filter(c => 
+                    c.contractCategory !== 'mp002_new' && c.contractCategory !== 'mp002_old'
+                );
+                
+                const optimizedRoutes = [];
+                let routeNumber = 1;
+                
+                const totalContainers = containers.length;
+                let processedContainers = 0;
+                
+                // Nejprve MP002 trasy
+                if (mp002Containers.length > 0) {
+                    const unvisitedMP002 = [...mp002Containers];
+                    const stopsPerRoute = Math.min(this.maxStopsPerRoute, 80);
+                    
+                    while (unvisitedMP002.length > 0) {
+                        const route = this.createRoute(unvisitedMP002, routeNumber, stopsPerRoute);
+                        route.category = 'MP002';
+                        optimizedRoutes.push(route);
+                        
+                        processedContainers += route.stops.length;
+                        const progress = 5 + Math.round((processedContainers / totalContainers) * 65);
+                        this.updateProgress(Math.min(progress, 70), `Trasa ${routeNumber} (MP002)...`);
+                        
+                        if (routeNumber % 2 === 0) {
+                            await new Promise(resolve => setTimeout(resolve, 10));
+                        }
+                        
+                        routeNumber++;
+                    }
+                }
+                
+                // Pak ostatní trasy
+                if (otherContainers.length > 0) {
+                    const unvisitedOther = [...otherContainers];
+                    const stopsPerRoute = Math.min(this.maxStopsPerRoute, Math.ceil(otherContainers.length / this.vehicleCount / 2));
+                    
+                    while (unvisitedOther.length > 0) {
+                        const route = this.createRoute(unvisitedOther, routeNumber, stopsPerRoute);
+                        route.category = 'Ostatní';
+                        optimizedRoutes.push(route);
+                        
+                        processedContainers += route.stops.length;
+                        const progress = 5 + Math.round((processedContainers / totalContainers) * 65);
+                        this.updateProgress(Math.min(progress, 70), `Trasa ${routeNumber} (ostatní)...`);
+                        
+                        if (routeNumber % 2 === 0) {
+                            await new Promise(resolve => setTimeout(resolve, 10));
+                        }
+                        
+                        routeNumber++;
+                    }
+                }
+                
+                return optimizedRoutes;
+            }
+            
+            // ==================== LOKÁLNÍ SERVER S GPU (cuOpt) ====================
+            
+            async calculateAllRoutesLocal() {
+                const totalRoutes = this.routes.length;
+                
+                // Připrav data pro API
+                const containers = [];
+                this.routes.forEach(route => {
+                    route.stops.forEach(stop => {
+                        containers.push({
+                            id: stop.id,
+                            lat: stop.lat,
+                            lng: stop.lng,
+                            volume: stop.volume || 1100,
+                            service_time: stop.isCustomerContainer ? 120 : 20
+                        });
+                    });
+                });
+                
+                // Připrav vozidla
+                const vehicles = [];
+                for (let i = 0; i < this.vehicleCount; i++) {
+                    vehicles.push({
+                        id: `V${i + 1}`,
+                        capacity_volume: 20000,
+                        capacity_weight: 15000,
+                        max_route_duration: 480
+                    });
+                }
+                
+                const requestBody = {
+                    depot: {
+                        lat: this.depot.lat,
+                        lng: this.depot.lng
+                    },
+                    containers: containers,
+                    vehicles: vehicles,
+                    options: {
+                        algorithm: 'cuopt',
+                        respect_capacity: true,
+                        minimize: 'distance'
+                    }
+                };
+                
+                try {
+                    this.updateProgress(75, 'Volám GPU optimalizaci...');
+                    
+                    const response = await fetch(`${this.localApiUrl}/api/v1/optimize`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (result.status !== 'success') {
+                        throw new Error(result.message || 'Optimalizace selhala');
+                    }
+                    
+                    console.log(`✅ GPU optimalizace dokončena za ${result.computation_time_ms}ms`);
+                    console.log(`   Algoritmus: ${result.algorithm_used}`);
+                    console.log(`   Celková vzdálenost: ${result.summary.total_distance_km} km`);
+                    
+                    // Aktualizuj trasy z výsledku
+                    this.routes = [];
+                    result.routes.forEach((apiRoute, idx) => {
+                        const route = {
+                            id: idx + 1,
+                            stops: [],
+                            distance: apiRoute.distance_km,
+                            drivingTime: apiRoute.duration_min,
+                            emptyingTime: 0,
+                            totalTime: apiRoute.duration_min,
+                            isOSRM: true,
+                            routingProvider: 'cuOpt GPU'
+                        };
+                        
+                        // Mapuj zastávky zpět na container data
+                        apiRoute.stops.forEach((stop, stopIdx) => {
+                            const originalContainer = this.containers.find(c => c.id === stop.container_id);
+                            if (originalContainer) {
+                                const stopData = Object.assign({}, originalContainer, {
+                                    orderNumber: stopIdx + 1
+                                });
+                                route.stops.push(stopData);
+                                route.emptyingTime += originalContainer.isCustomerContainer ? 2 : 0.33;
+                            }
+                        });
+                        
+                        route.totalTime = route.drivingTime + route.emptyingTime;
+                        this.routes.push(route);
+                    });
+                    
+                    this.updateProgress(95, 'Hotovo!');
+                    
+                } catch (err) {
+                    console.error('Lokální API chyba:', err);
+                    
+                    // Fallback na OSRM
+                    this.showError(`GPU API nedostupné, používám OSRM: ${err.message}`);
+                    await this.calculateAllRoutesOSRM();
+                }
+            }
+            
+            // ==================== KONEC LOKÁLNÍ SERVER ====================
+            
+            // Spočítá skutečné vzdálenosti pro všechny trasy pomocí OSRM
+            async calculateAllRoutesOSRM() {
+                const totalRoutes = this.routes.length;
+                
+                for (let i = 0; i < this.routes.length; i++) {
+                    const route = this.routes[i];
+                    
+                    // Update progress (70-98% je pro OSRM)
+                    const progress = 70 + Math.round((i / totalRoutes) * 28);
+                    this.updateProgress(progress, `OSRM trasa ${i + 1}/${totalRoutes}...`);
+                    
+                    try {
+                        // Vytvoř seznam bodů včetně depa
+                        let allPoints = [];
+                        
+                        if (this.depot) {
+                            allPoints.push({ lat: this.depot.lat, lng: this.depot.lng });
+                        }
+                        
+                        route.stops.forEach(stop => {
+                            allPoints.push({ lat: stop.lat, lng: stop.lng });
+                        });
+                        
+                        if (this.depot) {
+                            allPoints.push({ lat: this.depot.lat, lng: this.depot.lng });
+                        }
+                        
+                        // Pro krátké trasy jeden požadavek
+                        if (allPoints.length <= 100) {
+                            const coordinates = allPoints.map(p => `${p.lng},${p.lat}`).join(';');
+                            const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false`;
+                            
+                            const response = await fetch(url);
+                            const data = await response.json();
+                            
+                            if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                                route.distance = data.routes[0].distance / 1000; // km
+                                route.drivingTime = data.routes[0].duration / 60; // minuty
+                                route.totalTime = route.drivingTime + route.emptyingTime;
+                                route.isOSRM = true;
+                            }
+                        } else {
+                            // Pro dlouhé trasy segmentace
+                            await this.calculateLongRouteOSRM(route, allPoints);
+                        }
+                        
+                        // Pauza mezi požadavky
+                        if (i < this.routes.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
+                        
+                    } catch (err) {
+                        console.error(`Chyba OSRM pro trasu ${route.id}:`, err);
+                        // Ponecháme přímou vzdálenost
+                        route.isOSRM = false;
+                    }
+                }
+            }
+            
+            // Výpočet dlouhé trasy pomocí segmentace
+            async calculateLongRouteOSRM(route, allPoints) {
+                const maxPointsPerRequest = 100;
+                let totalDistance = 0;
+                let totalDuration = 0;
+                
+                // Rozděl na segmenty
+                for (let i = 0; i < allPoints.length; i += maxPointsPerRequest - 1) {
+                    const segmentPoints = allPoints.slice(i, Math.min(i + maxPointsPerRequest, allPoints.length));
+                    
+                    if (segmentPoints.length < 2) continue;
+                    
+                    const coordinates = segmentPoints.map(p => `${p.lng},${p.lat}`).join(';');
+                    const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false`;
+                    
+                    try {
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        
+                        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                            totalDistance += data.routes[0].distance / 1000;
+                            totalDuration += data.routes[0].duration / 60;
+                        }
+                        
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    } catch (err) {
+                        console.error('Segment error:', err);
+                    }
+                }
+                
+                if (totalDistance > 0) {
+                    route.distance = totalDistance;
+                    route.drivingTime = totalDuration;
+                    route.totalTime = route.drivingTime + route.emptyingTime;
+                    route.isOSRM = true;
+                }
+            }
+            
+            // ==================== HERE ROUTING API ====================
+            
+            async calculateAllRoutesHERE() {
+                const totalRoutes = this.routes.length;
+                
+                for (let i = 0; i < this.routes.length; i++) {
+                    const route = this.routes[i];
+                    
+                    // Update progress (70-98% je pro HERE)
+                    const progress = 70 + Math.round((i / totalRoutes) * 28);
+                    this.updateProgress(progress, `HERE trasa ${i + 1}/${totalRoutes}...`);
+                    
+                    try {
+                        // Vytvoř seznam bodů včetně depa
+                        let allPoints = [];
+                        
+                        if (this.depot) {
+                            allPoints.push({ lat: this.depot.lat, lng: this.depot.lng });
+                        }
+                        
+                        route.stops.forEach(stop => {
+                            allPoints.push({ lat: stop.lat, lng: stop.lng });
+                        });
+                        
+                        if (this.depot) {
+                            allPoints.push({ lat: this.depot.lat, lng: this.depot.lng });
+                        }
+                        
+                        // HERE API limit: 50 via points
+                        if (allPoints.length <= 52) {
+                            await this.calculateShortRouteHERE(route, allPoints);
+                        } else {
+                            // Pro dlouhé trasy segmentace
+                            await this.calculateLongRouteHERE(route, allPoints);
+                        }
+                        
+                        // Pauza mezi požadavky (HERE má limit 10 req/sec pro free tier)
+                        if (i < this.routes.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 150));
+                        }
+                        
+                    } catch (err) {
+                        console.error(`Chyba HERE pro trasu ${route.id}:`, err);
+                        route.isOSRM = false;
+                    }
+                }
+            }
+            
+            // HERE routing pro krátké trasy (do 50 waypointů)
+            async calculateShortRouteHERE(route, allPoints) {
+                if (allPoints.length < 2) return;
+                
+                const origin = `${allPoints[0].lat},${allPoints[0].lng}`;
+                const destination = `${allPoints[allPoints.length - 1].lat},${allPoints[allPoints.length - 1].lng}`;
+                
+                // Via points (prostřední body)
+                const viaPoints = allPoints.slice(1, -1);
+                const viaParams = viaPoints.map(p => `via=${p.lat},${p.lng}!passThrough=true`).join('&');
+                
+                let url = `https://router.hereapi.com/v8/routes?transportMode=car&origin=${origin}&destination=${destination}&return=summary&apiKey=${this.hereApiKey}`;
+                
+                if (viaParams) {
+                    url += '&' + viaParams;
+                }
+                
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    
+                    if (data.routes && data.routes.length > 0) {
+                        // HERE vrací sections, musíme sečíst všechny
+                        let totalLength = 0;
+                        let totalDuration = 0;
+                        
+                        data.routes[0].sections.forEach(section => {
+                            totalLength += section.summary.length;
+                            totalDuration += section.summary.duration;
+                        });
+                        
+                        route.distance = totalLength / 1000; // metry na km
+                        route.drivingTime = totalDuration / 60; // sekundy na minuty
+                        route.totalTime = route.drivingTime + route.emptyingTime;
+                        route.isOSRM = true; // Použijeme stejný flag
+                        route.routingProvider = 'HERE';
+                        
+                        console.log(`✓ HERE trasa ${route.id}: ${route.distance.toFixed(2)} km, ${route.drivingTime.toFixed(0)} min`);
+                    } else if (data.error) {
+                        console.error('HERE API error:', data.error);
+                        throw new Error(data.error.message || 'HERE API error');
+                    }
+                } catch (err) {
+                    console.error('HERE fetch error:', err);
+                    throw err;
+                }
+            }
+            
+            // HERE routing pro dlouhé trasy (segmentace)
+            async calculateLongRouteHERE(route, allPoints) {
+                const maxPointsPerRequest = 50; // HERE limit
+                let totalDistance = 0;
+                let totalDuration = 0;
+                
+                // Rozděl na segmenty
+                for (let i = 0; i < allPoints.length - 1; i += maxPointsPerRequest - 1) {
+                    const segmentEnd = Math.min(i + maxPointsPerRequest, allPoints.length);
+                    const segmentPoints = allPoints.slice(i, segmentEnd);
+                    
+                    if (segmentPoints.length < 2) continue;
+                    
+                    const origin = `${segmentPoints[0].lat},${segmentPoints[0].lng}`;
+                    const destination = `${segmentPoints[segmentPoints.length - 1].lat},${segmentPoints[segmentPoints.length - 1].lng}`;
+                    
+                    const viaPoints = segmentPoints.slice(1, -1);
+                    const viaParams = viaPoints.map(p => `via=${p.lat},${p.lng}!passThrough=true`).join('&');
+                    
+                    let url = `https://router.hereapi.com/v8/routes?transportMode=car&origin=${origin}&destination=${destination}&return=summary&apiKey=${this.hereApiKey}`;
+                    
+                    if (viaParams) {
+                        url += '&' + viaParams;
+                    }
+                    
+                    try {
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        
+                        if (data.routes && data.routes.length > 0) {
+                            data.routes[0].sections.forEach(section => {
+                                totalDistance += section.summary.length / 1000;
+                                totalDuration += section.summary.duration / 60;
+                            });
+                        }
+                        
+                        // Pauza mezi segmenty
+                        await new Promise(resolve => setTimeout(resolve, 150));
+                        
+                    } catch (err) {
+                        console.error('HERE segment error:', err);
+                    }
+                }
+                
+                if (totalDistance > 0) {
+                    route.distance = totalDistance;
+                    route.drivingTime = totalDuration;
+                    route.totalTime = route.drivingTime + route.emptyingTime;
+                    route.isOSRM = true;
+                    route.routingProvider = 'HERE';
+                    
+                    console.log(`✓ HERE trasa ${route.id} (segmentovaná): ${totalDistance.toFixed(2)} km`);
+                }
+            }
+            
+            // ==================== KONEC HERE API ====================
+            
+            // Varianta 1: Křížové rozložení - rozdělení na vozidla s nearest neighbor
+            optimizeVariant1(containers) {
+                const optimizedRoutes = [];
+                const unvisited = [...containers];
+                let routeNumber = 1;
+                
+                // Počet tras na vozidlo
+                const totalContainers = unvisited.length;
+                const containersPerVehicle = Math.ceil(totalContainers / this.vehicleCount);
+                const stopsPerRoute = Math.min(this.maxStopsPerRoute, Math.ceil(containersPerVehicle / 2));
+                
+                while (unvisited.length > 0) {
+                    const route = this.createRoute(unvisited, routeNumber, stopsPerRoute);
+                    optimizedRoutes.push(route);
+                    routeNumber++;
+                }
+                
+                return optimizedRoutes;
+            }
+            
+            // Varianta 2: Oddělení MP002 do samostatných rajonů
+            optimizeVariant2(containers) {
+                const optimizedRoutes = [];
+                let routeNumber = 1;
+                
+                // Rozdělení na MP002 a ostatní
+                const mp002Containers = containers.filter(c => c.contractCategory === 'mp002_new');
+                const otherContainers = containers.filter(c => c.contractCategory !== 'mp002_new');
+                
+                // Optimalizace MP002 nádob
+                const mp002Unvisited = [...mp002Containers];
+                const mp002StopsPerRoute = Math.min(this.maxStopsPerRoute, 
+                    Math.ceil(mp002Containers.length / Math.ceil(this.vehicleCount / 2)));
+                
+                while (mp002Unvisited.length > 0) {
+                    const route = this.createRoute(mp002Unvisited, routeNumber, mp002StopsPerRoute);
+                    route.category = 'MP002 (nový režim)';
+                    optimizedRoutes.push(route);
+                    routeNumber++;
+                }
+                
+                // Optimalizace ostatních nádob
+                const otherUnvisited = [...otherContainers];
+                const otherStopsPerRoute = Math.min(this.maxStopsPerRoute,
+                    Math.ceil(otherContainers.length / Math.ceil(this.vehicleCount / 2)));
+                
+                while (otherUnvisited.length > 0) {
+                    const route = this.createRoute(otherUnvisited, routeNumber, otherStopsPerRoute);
+                    route.category = 'Ostatní (stávající režim)';
+                    optimizedRoutes.push(route);
+                    routeNumber++;
+                }
+                
+                return optimizedRoutes;
+            }
+            
+            // Vytvoření jedné trasy pomocí nearest neighbor
+            createRoute(unvisited, routeNumber, maxStops) {
+                const route = {
+                    id: routeNumber,
+                    stops: [],
+                    distance: 0,
+                    drivingTime: 0,
+                    emptyingTime: 0,
+                    totalTime: 0,
+                    category: '',
+                    customerStops: 0,
+                    standardStops: 0,
+                    distanceFromDepot: 0,
+                    distanceToDepot: 0
+                };
+                
+                let current;
+                
+                // Pokud máme depo, najdi nejbližší nádobu k depu
+                if (this.depot && unvisited.length > 0) {
+                    let nearestToDepot = null;
+                    let minDistFromDepot = Infinity;
+                    let nearestIdx = -1;
+                    
+                    unvisited.forEach((container, idx) => {
+                        const dist = this.calculateDistance(
+                            this.depot.lat, this.depot.lng,
+                            container.lat, container.lng
+                        );
+                        if (dist < minDistFromDepot) {
+                            minDistFromDepot = dist;
+                            nearestToDepot = container;
+                            nearestIdx = idx;
+                        }
+                    });
+                    
+                    if (nearestToDepot) {
+                        current = nearestToDepot;
+                        unvisited.splice(nearestIdx, 1);
+                        route.distanceFromDepot = minDistFromDepot;
+                        route.distance += minDistFromDepot;
+                    }
+                } else {
+                    // Bez depa - začni první nádobou
+                    current = unvisited.shift();
+                }
+                
+                if (!current) return route;
+                
+                route.stops.push(this.copyContainerData(current));
+                
+                // Počítadla pro zákaznické vs. standardní nádoby
+                if (current.isCustomerContainer) {
+                    route.customerStops++;
+                } else {
+                    route.standardStops++;
+                }
+                
+                while (route.stops.length < maxStops && unvisited.length > 0) {
+                    let nearest = null;
+                    let minDist = Infinity;
+                    let nearestIdx = -1;
+                    
+                    unvisited.forEach((container, idx) => {
+                        const dist = this.calculateDistance(
+                            current.lat, current.lng,
+                            container.lat, container.lng
+                        );
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearest = container;
+                            nearestIdx = idx;
+                        }
+                    });
+                    
+                    if (nearest) {
+                        route.stops.push(this.copyContainerData(nearest));
+                        route.distance += minDist;
+                        
+                        if (nearest.isCustomerContainer) {
+                            route.customerStops++;
+                        } else {
+                            route.standardStops++;
+                        }
+                        
+                        unvisited.splice(nearestIdx, 1);
+                        current = nearest;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Aplikuj vylepšení podle zvoleného algoritmu
+                if (route.stops.length > 3) {
+                    if (this.algorithmType === 'balanced' || this.algorithmType === 'quality') {
+                        // 2-opt vylepšení
+                        route.stops = this.improve2opt(route.stops);
+                    }
+                    
+                    if (this.algorithmType === 'quality') {
+                        // Or-opt vylepšení
+                        route.stops = this.improveOrOpt(route.stops);
+                    }
+                }
+                
+                // Přepočítej vzdálenost po optimalizaci
+                route.distance = this.calculateRouteDistance(route.stops);
+                
+                // Přidej vzdálenost z/do depa
+                if (this.depot && route.stops.length > 0) {
+                    const firstStop = route.stops[0];
+                    const lastStop = route.stops[route.stops.length - 1];
+                    
+                    route.distanceFromDepot = this.calculateDistance(
+                        this.depot.lat, this.depot.lng,
+                        firstStop.lat, firstStop.lng
+                    );
+                    route.distanceToDepot = this.calculateDistance(
+                        lastStop.lat, lastStop.lng,
+                        this.depot.lat, this.depot.lng
+                    );
+                    route.distance += route.distanceFromDepot + route.distanceToDepot;
+                }
+                
+                // Výpočet časů - s rozlišením standardní vs. zákaznické nádoby
+                route.drivingTime = (route.distance / this.avgSpeed) * 60;
+                route.emptyingTime = (
+                    (route.standardStops * this.emptyTime) + 
+                    (route.customerStops * this.emptyTimeCustomer)
+                ) / 60;
+                route.totalTime = route.drivingTime + route.emptyingTime;
+                
+                return route;
+            }
+            
+            // Výpočet celkové vzdálenosti trasy
+            calculateRouteDistance(stops) {
+                let distance = 0;
+                for (let i = 0; i < stops.length - 1; i++) {
+                    distance += this.calculateDistance(
+                        stops[i].lat, stops[i].lng,
+                        stops[i + 1].lat, stops[i + 1].lng
+                    );
+                }
+                return distance;
+            }
+            
+            // 2-opt algoritmus - odstraňuje křížení v trase
+            improve2opt(stops) {
+                if (stops.length < 4) return stops;
+                
+                let improved = true;
+                let bestStops = stops.slice();
+                let iterations = 0;
+                const maxIterations = 1000; // Omezení pro velmi dlouhé trasy
+                
+                while (improved && iterations < maxIterations) {
+                    improved = false;
+                    iterations++;
+                    
+                    for (let i = 0; i < bestStops.length - 2; i++) {
+                        for (let j = i + 2; j < bestStops.length; j++) {
+                            // Spočítej současnou vzdálenost
+                            const d1 = this.calculateDistance(
+                                bestStops[i].lat, bestStops[i].lng,
+                                bestStops[i + 1].lat, bestStops[i + 1].lng
+                            );
+                            const d2 = this.calculateDistance(
+                                bestStops[j].lat, bestStops[j].lng,
+                                bestStops[(j + 1) % bestStops.length].lat, 
+                                bestStops[(j + 1) % bestStops.length].lng
+                            );
+                            
+                            // Spočítej novou vzdálenost po prohození
+                            const d3 = this.calculateDistance(
+                                bestStops[i].lat, bestStops[i].lng,
+                                bestStops[j].lat, bestStops[j].lng
+                            );
+                            const d4 = this.calculateDistance(
+                                bestStops[i + 1].lat, bestStops[i + 1].lng,
+                                bestStops[(j + 1) % bestStops.length].lat,
+                                bestStops[(j + 1) % bestStops.length].lng
+                            );
+                            
+                            // Pokud je nová vzdálenost kratší, proveď swap
+                            if (d3 + d4 < d1 + d2 - 0.0001) {
+                                // Obrať úsek mezi i+1 a j
+                                const newStops = bestStops.slice(0, i + 1);
+                                const middle = bestStops.slice(i + 1, j + 1).reverse();
+                                const end = bestStops.slice(j + 1);
+                                bestStops = newStops.concat(middle).concat(end);
+                                improved = true;
+                            }
+                        }
+                    }
+                }
+                
+                return bestStops;
+            }
+            
+            // Or-opt algoritmus - přesouvá sekvence bodů na lepší pozice
+            improveOrOpt(stops) {
+                if (stops.length < 4) return stops;
+                
+                let bestStops = stops.slice();
+                let improved = true;
+                let iterations = 0;
+                const maxIterations = 500;
+                
+                // Zkus přesunout sekvence délky 1, 2 a 3
+                while (improved && iterations < maxIterations) {
+                    improved = false;
+                    iterations++;
+                    
+                    for (let segmentLength = 1; segmentLength <= 3; segmentLength++) {
+                        for (let i = 0; i < bestStops.length - segmentLength; i++) {
+                            // Segment k přesunutí
+                            const segment = bestStops.slice(i, i + segmentLength);
+                            
+                            // Vzdálenost při odebrání segmentu
+                            const currentCost = this.getSegmentCost(bestStops, i, segmentLength);
+                            
+                            // Zkus vložit segment na jinou pozici
+                            for (let j = 0; j < bestStops.length - segmentLength; j++) {
+                                if (j >= i - 1 && j <= i + segmentLength) continue;
+                                
+                                // Vytvoř novou trasu s přesunutým segmentem
+                                const newStops = this.moveSegment(bestStops, i, segmentLength, j);
+                                const newCost = this.calculateRouteDistance(newStops);
+                                const oldCost = this.calculateRouteDistance(bestStops);
+                                
+                                if (newCost < oldCost - 0.0001) {
+                                    bestStops = newStops;
+                                    improved = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (improved) break;
+                        }
+                        
+                        if (improved) break;
+                    }
+                }
+                
+                return bestStops;
+            }
+            
+            // Pomocná funkce pro Or-opt - získá cenu segmentu
+            getSegmentCost(stops, startIdx, length) {
+                let cost = 0;
+                
+                // Cena před segmentem
+                if (startIdx > 0) {
+                    cost += this.calculateDistance(
+                        stops[startIdx - 1].lat, stops[startIdx - 1].lng,
+                        stops[startIdx].lat, stops[startIdx].lng
+                    );
+                }
+                
+                // Cena za segmentem
+                if (startIdx + length < stops.length) {
+                    cost += this.calculateDistance(
+                        stops[startIdx + length - 1].lat, stops[startIdx + length - 1].lng,
+                        stops[startIdx + length].lat, stops[startIdx + length].lng
+                    );
+                }
+                
+                return cost;
+            }
+            
+            // Pomocná funkce pro Or-opt - přesune segment
+            moveSegment(stops, fromIdx, length, toIdx) {
+                const segment = stops.slice(fromIdx, fromIdx + length);
+                const remaining = stops.slice(0, fromIdx).concat(stops.slice(fromIdx + length));
+                
+                const insertIdx = toIdx > fromIdx ? toIdx - length + 1 : toIdx + 1;
+                const result = remaining.slice(0, insertIdx).concat(segment).concat(remaining.slice(insertIdx));
+                
+                return result;
+            }
+            
+            // Kopírování všech dat kontejneru
+            copyContainerData(container) {
+                return {
+                    id: container.id,
+                    lat: container.lat,
+                    lng: container.lng,
+                    volume: container.volume,
+                    type: container.type,
+                    wasteType: container.wasteType,
+                    gps: container.gps,
+                    contractId: container.contractId,
+                    contractCategory: container.contractCategory,
+                    collectionsPerYear: container.collectionsPerYear,
+                    customer: container.customer,
+                    locationName: container.locationName,
+                    driverNote: container.driverNote,
+                    isCustomerContainer: container.isCustomerContainer
+                };
+            }
+            
+            async displayRoute(route) {
+                if (!this.map) return;
+                
+                this.selectedRouteId = route.id;
+                this.clearMap();
+                
+                // Zobraz loading overlay
+                this.showLoadingOverlay(`Načítám trasu ${route.id}...`);
+                
+                // Zobraz depo marker pokud existuje
+                if (this.depot) {
+                    this.showDepotOnMap();
+                }
+                
+                // Seskup zastávky podle GPS souřadnic
+                const groupedStops = this.groupStopsByLocation(route.stops);
+                
+                // Zobraz markery - seskupené podle lokace
+                groupedStops.forEach((group) => {
+                    const firstStop = group.stops[0];
+                    const stopNumbers = group.stops.map(s => s.orderNumber);
+                    const isFirst = stopNumbers.includes(1);
+                    const isLast = stopNumbers.includes(route.stops.length);
+                    
+                    // Určení barvy okraje podle pozice v trase
+                    let borderColor = '#ffffff';
+                    let borderWidth = 2;
+                    
+                    if (isFirst) {
+                        borderColor = '#66bb6a'; // Zelená pro start
+                        borderWidth = 3;
+                    } else if (isLast) {
+                        borderColor = '#ef5350'; // Červená pro konec
+                        borderWidth = 3;
+                    }
+                    
+                    // Použij barvu podle převažujícího typu
+                    const color = this.getGroupColor(group.stops);
+                    const icon = this.getGroupedRouteIcon(group.stops, color, borderColor, borderWidth);
+                    
+                    const marker = L.marker([firstStop.lat, firstStop.lng], { icon: icon })
+                        .bindPopup(this.createGroupedPopupContent(group.stops))
+                        .addTo(this.map);
+                    
+                    this.markers.push(marker);
+                });
+                
+                // Získej skutečnou trasu po silnicích pomocí OSRM
+                try {
+                    await this.fetchRouteWithSegmentation(route);
+                } catch (err) {
+                    console.error('OSRM routing error:', err);
+                    this.drawStraightRoute(route);
+                    this.showSuccess('Zobrazena přímá vzdálenost (routing API nedostupné)');
+                }
+                
+                // Fit bounds včetně depa
+                const allCoords = route.stops.map(stop => [stop.lat, stop.lng]);
+                if (this.depot) {
+                    allCoords.push([this.depot.lat, this.depot.lng]);
+                }
+                const bounds = L.latLngBounds(allCoords);
+                this.map.fitBounds(bounds, { padding: [80, 80] });
+                
+                this.updateOverlay(route);
+                this.updateRouteSelection();
+            }
+            
+            // Seskupí zastávky podle GPS souřadnic
+            groupStopsByLocation(stops) {
+                const groups = new Map();
+                
+                stops.forEach((stop, index) => {
+                    // Klíč je kombinace lat,lng (zaokrouhleno na 6 desetinných míst)
+                    const key = `${stop.lat.toFixed(6)},${stop.lng.toFixed(6)}`;
+                    
+                    const stopWithOrder = Object.assign({}, stop, {
+                        orderNumber: index + 1
+                    });
+                    
+                    if (groups.has(key)) {
+                        groups.get(key).stops.push(stopWithOrder);
+                    } else {
+                        groups.set(key, {
+                            lat: stop.lat,
+                            lng: stop.lng,
+                            stops: [stopWithOrder]
+                        });
+                    }
+                });
+                
+                return Array.from(groups.values());
+            }
+            
+            // Vrátí barvu podle převažujícího typu v grupě
+            getGroupColor(stops) {
+                const paperCount = stops.filter(s => s.wasteType === 'paper').length;
+                const plasticCount = stops.filter(s => s.wasteType === 'plastic').length;
+                
+                if (paperCount > plasticCount) {
+                    return '#0099ff'; // Modrá
+                } else if (plasticCount > paperCount) {
+                    return '#ffd700'; // Žlutá
+                } else if (paperCount > 0) {
+                    return '#0099ff'; // Při shodě preferuj papír
+                } else {
+                    return '#808080'; // Šedá
+                }
+            }
+            
+            // Vytvoří ikonu pro skupinu nádob
+            getGroupedRouteIcon(stops, fillColor, borderColor, borderWidth) {
+                const stopNumbers = stops.map(s => s.orderNumber);
+                const hasMultiple = stops.length > 1;
+                
+                // Pro více nádob - smíšené typy = speciální barva
+                let actualFillColor = fillColor;
+                if (hasMultiple) {
+                    const hasPaper = stops.some(s => s.wasteType === 'paper');
+                    const hasPlastic = stops.some(s => s.wasteType === 'plastic');
+                    if (hasPaper && hasPlastic) {
+                        // Gradient efekt - použijeme zelenou pro mix
+                        actualFillColor = '#00d4aa';
+                    }
+                }
+                
+                // Určení tvaru podle převažujícího objemu
+                const volumes = stops.map(s => s.volume);
+                const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+                
+                let shape, size;
+                if (avgVolume >= 900) {
+                    shape = 'square';
+                    size = hasMultiple ? 34 : 28;
+                } else if (avgVolume >= 500) {
+                    shape = 'triangle';
+                    size = hasMultiple ? 34 : 28;
+                } else if (avgVolume >= 200) {
+                    shape = 'circle';
+                    size = hasMultiple ? 32 : 26;
+                } else {
+                    shape = 'diamond';
+                    size = hasMultiple ? 32 : 26;
+                }
+                
+                // Text pro zobrazení
+                let displayText;
+                if (stops.length === 1) {
+                    displayText = stopNumbers[0].toString();
+                } else if (stops.length === 2) {
+                    displayText = `${stopNumbers[0]},${stopNumbers[1]}`;
+                } else {
+                    // Pro 3+ nádob zobraz rozsah
+                    const min = Math.min(...stopNumbers);
+                    const max = Math.max(...stopNumbers);
+                    displayText = `${min}-${max}`;
+                }
+                
+                const svg = this.createGroupedMarkerSVG(shape, size, actualFillColor, borderColor, borderWidth, displayText, stops.length);
+                
+                return L.divIcon({
+                    className: 'custom-marker',
+                    html: svg,
+                    iconSize: [size * 2 + 8, size * 2 + 8],
+                    iconAnchor: [size + 4, size + 4]
+                });
+            }
+            
+            createGroupedMarkerSVG(shape, size, fillColor, borderColor, borderWidth, displayText, count) {
+                const svgSize = size * 2 + 8;
+                const center = svgSize / 2;
+                
+                let pathOrShape = '';
+                
+                switch(shape) {
+                    case 'square':
+                        pathOrShape = `<rect x="${center - size/2}" y="${center - size/2}" width="${size}" height="${size}" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                    
+                    case 'circle':
+                        pathOrShape = `<circle cx="${center}" cy="${center}" r="${size/2}" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                    
+                    case 'triangle':
+                        const h = size * 0.866;
+                        pathOrShape = `<path d="M ${center} ${center - h/2} L ${center + size/2} ${center + h/2} L ${center - size/2} ${center + h/2} Z" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                    
+                    case 'diamond':
+                        pathOrShape = `<path d="M ${center} ${center - size/2} L ${center + size/2} ${center} L ${center} ${center + size/2} L ${center - size/2} ${center} Z" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                }
+                
+                // Velikost písma podle délky textu
+                let fontSize;
+                if (displayText.length <= 2) {
+                    fontSize = size * 0.55;
+                } else if (displayText.length <= 4) {
+                    fontSize = size * 0.4;
+                } else {
+                    fontSize = size * 0.32;
+                }
+                
+                const textColor = this.getContrastColor(fillColor);
+                
+                // Badge pro počet nádob (pokud více než 1)
+                let badge = '';
+                if (count > 1) {
+                    const badgeSize = 14;
+                    const badgeX = svgSize - badgeSize/2 - 2;
+                    const badgeY = badgeSize/2 + 2;
+                    badge = `
+                        <circle cx="${badgeX}" cy="${badgeY}" r="${badgeSize/2}" fill="#ff5722" stroke="#fff" stroke-width="1"/>
+                        <text x="${badgeX}" y="${badgeY}" text-anchor="middle" dominant-baseline="central" 
+                              fill="#fff" font-size="9" font-weight="bold" font-family="Arial, sans-serif">
+                            ${count}
+                        </text>
+                    `;
+                }
+                
+                return `<svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg">
+                    ${pathOrShape}
+                    <text x="${center}" y="${center}" text-anchor="middle" dominant-baseline="central" 
+                          fill="${textColor}" font-size="${fontSize}" font-weight="bold" font-family="Arial, sans-serif">
+                        ${displayText}
+                    </text>
+                    ${badge}
+                </svg>`;
+            }
+            
+            // Vytvoří popup pro skupinu nádob
+            createGroupedPopupContent(stops) {
+                if (stops.length === 1) {
+                    return this.createRoutePopupContent(stops[0], stops[0].orderNumber);
+                }
+                
+                // Pro více nádob na jednom místě
+                let content = `
+                    <div class="popup-content">
+                        <strong style="color: #ff5722;">📍 ${stops.length} nádoby na jednom místě</strong>
+                        <hr style="border-color: #444; margin: 8px 0;">
+                `;
+                
+                stops.forEach((stop, idx) => {
+                    const wasteTypeLabel = stop.wasteType === 'paper' ? '📄 Papír' : 
+                                          stop.wasteType === 'plastic' ? '♻️ Plast' : 
+                                          '🗑️ Ostatní';
+                    const customerBadge = stop.isCustomerContainer ? ' 🏠' : '';
+                    
+                    content += `
+                        <div style="margin-bottom: 8px; padding-bottom: 8px; ${idx < stops.length - 1 ? 'border-bottom: 1px solid #444;' : ''}">
+                            <strong>Zastávka ${stop.orderNumber}</strong>${customerBadge}<br>
+                            <span style="color: #aaa;">${stop.id}</span><br>
+                            ${wasteTypeLabel} | ${stop.volume}L
+                            ${stop.locationName ? `<br><small>${stop.locationName}</small>` : ''}
+                        </div>
+                    `;
+                });
+                
+                content += '</div>';
+                return content;
+            }
+            
+            getRouteIconByVolume(volume, fillColor, borderColor, borderWidth, stopNumber) {
+                let shape, size;
+                
+                // Převod na číslo - volume může být string!
+                const vol = parseInt(volume, 10);
+                
+                // VELKÉ symboly pro trasy s čísly
+                if (vol === 1100) {
+                    shape = 'square';
+                    size = 28; // Zvětšeno pro čitelnost čísla
+                } else if (vol === 240) {
+                    shape = 'circle';
+                    size = 26;
+                } else if (vol === 660) {
+                    shape = 'triangle';
+                    size = 28;
+                } else if (vol === 120) {
+                    shape = 'diamond';
+                    size = 26;
+                } else if (vol === 360) {
+                    shape = 'star';
+                    size = 28;
+                } else {
+                    shape = 'circle';
+                    size = 24;
+                }
+                
+                const svg = this.createRouteMarkerSVG(shape, size, fillColor, borderColor, borderWidth, stopNumber);
+                
+                return L.divIcon({
+                    className: 'custom-marker',
+                    html: svg,
+                    iconSize: [size * 2 + 8, size * 2 + 8],
+                    iconAnchor: [size + 4, size + 4]
+                });
+            }
+            
+            createRouteMarkerSVG(shape, size, fillColor, borderColor, borderWidth, stopNumber) {
+                const svgSize = size * 2 + 8;
+                const center = svgSize / 2;
+                
+                let pathOrShape = '';
+                
+                switch(shape) {
+                    case 'square':
+                        pathOrShape = `<rect x="${center - size/2}" y="${center - size/2}" width="${size}" height="${size}" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                    
+                    case 'circle':
+                        pathOrShape = `<circle cx="${center}" cy="${center}" r="${size/2}" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                    
+                    case 'triangle':
+                        const h = size * 0.866;
+                        pathOrShape = `<path d="M ${center} ${center - h/2} L ${center + size/2} ${center + h/2} L ${center - size/2} ${center + h/2} Z" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                    
+                    case 'diamond':
+                        pathOrShape = `<path d="M ${center} ${center - size/2} L ${center + size/2} ${center} L ${center} ${center + size/2} L ${center - size/2} ${center} Z" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                    
+                    case 'star':
+                        const points = [];
+                        for (let i = 0; i < 10; i++) {
+                            const angle = (Math.PI * 2 * i) / 10 - Math.PI / 2;
+                            const r = i % 2 === 0 ? size/2 : size/4;
+                            const x = center + r * Math.cos(angle);
+                            const y = center + r * Math.sin(angle);
+                            points.push(`${x},${y}`);
+                        }
+                        pathOrShape = `<polygon points="${points.join(' ')}" fill="${fillColor}" stroke="${borderColor}" stroke-width="${borderWidth}"/>`;
+                        break;
+                }
+                
+                // Přidání čísla zastávky
+                const textColor = this.getContrastColor(fillColor);
+                const fontSize = stopNumber > 99 ? size * 0.4 : (stopNumber > 9 ? size * 0.5 : size * 0.6);
+                
+                return `<svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg">
+                    ${pathOrShape}
+                    <text x="${center}" y="${center}" text-anchor="middle" dominant-baseline="central" 
+                          fill="${textColor}" font-size="${fontSize}" font-weight="bold" font-family="Arial, sans-serif">
+                        ${stopNumber}
+                    </text>
+                </svg>`;
+            }
+            
+            getContrastColor(hexColor) {
+                // Převod hex na RGB a výpočet kontrastu
+                const r = parseInt(hexColor.slice(1, 3), 16);
+                const g = parseInt(hexColor.slice(3, 5), 16);
+                const b = parseInt(hexColor.slice(5, 7), 16);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                return brightness > 128 ? '#000000' : '#ffffff';
+            }
+            
+            createRoutePopupContent(container, orderNumber) {
+                const wasteTypeLabel = container.wasteType === 'paper' ? '📄 Papír' : 
+                                      container.wasteType === 'plastic' ? '♻️ Plast' : 
+                                      '🗑️ Ostatní';
+                
+                const customerBadge = container.isCustomerContainer ? 
+                    '<span style="color: #ffa726;">🏠 Zákaznická</span><br>' : '';
+                
+                return `
+                    <div class="popup-content">
+                        <strong>Zastávka ${orderNumber}</strong><br>
+                        <strong>${container.id}</strong><br>
+                        ${wasteTypeLabel} | ${container.volume}L<br>
+                        ${customerBadge}
+                        ${container.locationName ? `<small>${container.locationName}</small><br>` : ''}
+                        ${container.driverNote ? `<small style="color: #ffa726;">📝 ${container.driverNote}</small>` : ''}
+                    </div>
+                `;
+            }
+            
+            async fetchRouteWithSegmentation(route) {
+                const maxPointsPerRequest = 100;
+                
+                // Vytvoř seznam bodů včetně depa
+                let allPoints = [];
+                
+                // Přidej depo na začátek pokud existuje
+                if (this.depot) {
+                    allPoints.push({ lat: this.depot.lat, lng: this.depot.lng, isDepot: true });
+                }
+                
+                // Přidej všechny zastávky
+                route.stops.forEach(stop => {
+                    allPoints.push({ lat: stop.lat, lng: stop.lng, isDepot: false });
+                });
+                
+                // Přidej depo na konec pokud existuje
+                if (this.depot) {
+                    allPoints.push({ lat: this.depot.lat, lng: this.depot.lng, isDepot: true });
+                }
+                
+                // Pokud je méně než limit, udělej jeden požadavek
+                if (allPoints.length <= maxPointsPerRequest) {
+                    const coordinates = allPoints.map(p => `${p.lng},${p.lat}`).join(';');
+                    await this.fetchAndDrawRouteWithDepot(route, coordinates);
+                    return;
+                }
+                
+                // Pro delší trasy rozděl na segmenty
+                console.log(`📍 Trasa má ${allPoints.length} bodů (vč. depa), dělím na segmenty...`);
+                
+                let totalDistance = 0;
+                let totalDuration = 0;
+                let allCoordinates = [];
+                
+                // Rozděl na segmenty s překrytím
+                const segments = [];
+                for (let i = 0; i < allPoints.length; i += maxPointsPerRequest - 1) {
+                    const segmentPoints = allPoints.slice(i, Math.min(i + maxPointsPerRequest, allPoints.length));
+                    segments.push(segmentPoints);
+                }
+                
+                console.log(`📦 Vytvořeno ${segments.length} segmentů`);
+                
+                // Zpracuj každý segment
+                for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+                    const segment = segments[segIdx];
+                    const coordinates = segment.map(p => `${p.lng},${p.lat}`).join(';');
+                    
+                    try {
+                        const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        
+                        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                            const segmentGeometry = data.routes[0].geometry;
+                            const segmentCoords = segmentGeometry.coordinates.map(coord => [coord[1], coord[0]]);
+                            
+                            if (segIdx === 0) {
+                                allCoordinates.push(...segmentCoords);
+                            } else {
+                                allCoordinates.push(...segmentCoords.slice(1));
+                            }
+                            
+                            totalDistance += data.routes[0].distance / 1000;
+                            totalDuration += data.routes[0].duration / 60;
+                            
+                            console.log(`✓ Segment ${segIdx + 1}/${segments.length}: ${(data.routes[0].distance / 1000).toFixed(2)} km`);
+                        }
+                        
+                        if (segIdx < segments.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                        }
+                        
+                    } catch (err) {
+                        console.error(`Error fetching segment ${segIdx + 1}:`, err);
+                    }
+                }
+                
+                if (allCoordinates.length > 0) {
+                    this.polyline = L.polyline(allCoordinates, {
+                        color: '#00d4aa',
+                        weight: 4,
+                        opacity: 0.8
+                    }).addTo(this.map);
+                    
+                    route.actualDistance = totalDistance;
+                    route.actualDrivingTime = totalDuration;
+                    route.actualTotalTime = totalDuration + route.emptyingTime;
+                    
+                    console.log(`✅ Celková trasa: ${totalDistance.toFixed(2)} km, ${totalDuration.toFixed(0)} min`);
+                } else {
+                    this.drawStraightRoute(route);
+                }
+            }
+            
+            async fetchAndDrawRouteWithDepot(route, coordinates) {
+                const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                    const geometry = data.routes[0].geometry;
+                    const routeCoords = geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                    
+                    this.polyline = L.polyline(routeCoords, {
+                        color: '#00d4aa',
+                        weight: 4,
+                        opacity: 0.8
+                    }).addTo(this.map);
+                    
+                    route.actualDistance = data.routes[0].distance / 1000;
+                    route.actualDrivingTime = data.routes[0].duration / 60;
+                    route.actualTotalTime = route.actualDrivingTime + route.emptyingTime;
+                    
+                    this.hideLoadingOverlay();
+                } else {
+                    throw new Error('OSRM routing failed');
+                }
+            }
+            
+            async fetchAndDrawRoute(route, coordinates) {
+                const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                    const routeGeometry = data.routes[0].geometry;
+                    const routeCoordinates = routeGeometry.coordinates.map(coord => [coord[1], coord[0]]);
+                    
+                    this.polyline = L.polyline(routeCoordinates, {
+                        color: '#00d4aa',
+                        weight: 4,
+                        opacity: 0.8
+                    }).addTo(this.map);
+                    
+                    // Aktualizuj vzdálenost a čas podle OSRM
+                    const actualDistance = data.routes[0].distance / 1000; // km
+                    const actualDuration = data.routes[0].duration / 60; // minuty
+                    
+                    route.actualDistance = actualDistance;
+                    route.actualDrivingTime = actualDuration;
+                    route.actualTotalTime = actualDuration + route.emptyingTime;
+                    
+                    console.log(`✓ OSRM routing: ${actualDistance.toFixed(2)} km, ${actualDuration.toFixed(0)} min`);
+                } else {
+                    this.drawStraightRoute(route);
+                }
+            }
+            
+            showLoadingOverlay(message) {
+                const overlay = document.getElementById('mapOverlay');
+                const title = document.getElementById('overlayTitle');
+                const content = document.getElementById('overlayContent');
+                
+                title.textContent = 'Načítání...';
+                content.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; padding: 20px; gap: 12px;">
+                        <div class="spinner"></div>
+                        <span>${message}</span>
+                    </div>
+                `;
+                overlay.classList.add('visible');
+            }
+            
+            drawStraightRoute(route) {
+                let routeCoords = [];
+                
+                // Přidej depo na začátek
+                if (this.depot) {
+                    routeCoords.push([this.depot.lat, this.depot.lng]);
+                }
+                
+                // Přidej všechny zastávky
+                routeCoords.push(...route.stops.map(stop => [stop.lat, stop.lng]));
+                
+                // Přidej depo na konec
+                if (this.depot) {
+                    routeCoords.push([this.depot.lat, this.depot.lng]);
+                }
+                
+                this.polyline = L.polyline(routeCoords, {
+                    color: '#00d4aa',
+                    weight: 3,
+                    opacity: 0.8,
+                    dashArray: '5, 10'
+                }).addTo(this.map);
+                
+                this.hideLoadingOverlay();
+            }
+            
+            resetMapView() {
+                this.selectedRouteId = null;
+                this.displayContainersOnMap();
+                this.hideOverlay();
+                this.updateRouteSelection();
+            }
+            
+            updateOverlay(route) {
+                const overlay = document.getElementById('mapOverlay');
+                const title = document.getElementById('overlayTitle');
+                const content = document.getElementById('overlayContent');
+                
+                if (route) {
+                    title.textContent = `Trasa ${route.id}`;
+                    
+                    const distance = route.distance;
+                    const drivingTime = route.drivingTime;
+                    const totalTime = route.totalTime;
+                    const isOSRM = route.isOSRM || false;
+                    const isLongRoute = route.stops.length > 100;
+                    
+                    // Spočítej unikátní lokace
+                    const groupedStops = this.groupStopsByLocation(route.stops);
+                    const uniqueLocations = groupedStops.length;
+                    const totalContainers = route.stops.length;
+                    const hasMultipleAtLocation = uniqueLocations < totalContainers;
+                    
+                    // Info o depu
+                    const depotInfo = this.depot ? `
+                        <div class="info-row" style="border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px;">
+                            <span class="info-label">🏭 Z depa</span>
+                            <span class="info-value">${(route.distanceFromDepot || 0).toFixed(2)} km</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">🏭 Do depa</span>
+                            <span class="info-value">${(route.distanceToDepot || 0).toFixed(2)} km</span>
+                        </div>
+                    ` : '';
+                    
+                    // Info o seskupených zastávkách
+                    const groupInfo = hasMultipleAtLocation ? `
+                        <div class="info-row">
+                            <span class="info-label">📍 Unikátních míst</span>
+                            <span class="info-value">${uniqueLocations}</span>
+                        </div>
+                    ` : '';
+                    
+                    content.innerHTML = `
+                        ${route.category ? `<div class="route-category">${route.category}</div>` : ''}
+                        <div class="info-row">
+                            <span class="info-label">Počet nádob</span>
+                            <span class="info-value">${totalContainers}</span>
+                        </div>
+                        ${groupInfo}
+                        ${route.customerStops > 0 ? `
+                        <div class="info-row">
+                            <span class="info-label">🏠 Zákaznické</span>
+                            <span class="info-value" style="color: var(--warning);">${route.customerStops}</span>
+                        </div>
+                        ` : ''}
+                        <div class="info-row">
+                            <span class="info-label">Vzdálenost</span>
+                            <span class="info-value">${distance.toFixed(2)} km</span>
+                        </div>
+                        ${depotInfo}
+                        <div class="info-row">
+                            <span class="info-label">Čas jízdy</span>
+                            <span class="info-value">${drivingTime.toFixed(0)} min</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Čas vysypání</span>
+                            <span class="info-value">${route.emptyingTime.toFixed(0)} min</span>
+                        </div>
+                        <div class="info-row" style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+                            <span class="info-label">Celkový čas</span>
+                            <span class="info-value" style="color: var(--accent-primary)">
+                                ${(totalTime / 60).toFixed(2)} hod
+                            </span>
+                        </div>
+                        ${isOSRM ? `
+                            <div style="margin-top: 12px; padding: 8px; background: rgba(0, 212, 170, 0.1); border-radius: 6px; font-size: 11px; color: var(--accent-primary);">
+                                ✓ Trasa vypočítána podle skutečných silnic
+                                ${isLongRoute ? `<br>📦 Rozděleno na segmenty` : ''}
+                                ${this.depot ? '<br>🏭 Včetně cesty z/do depa' : ''}
+                                ${hasMultipleAtLocation ? `<br>📍 ${totalContainers - uniqueLocations} nádob sdílí lokaci` : ''}
+                            </div>
+                        ` : ''}
+                    `;
+                    overlay.classList.add('visible');
+                } else {
+                    overlay.classList.remove('visible');
+                }
+            }
+            
+            hideOverlay() {
+                document.getElementById('mapOverlay').classList.remove('visible');
+            }
+            
+            updateRouteSelection() {
+                const items = document.querySelectorAll('.route-item');
+                items.forEach(item => {
+                    const routeId = parseInt(item.dataset.routeId);
+                    if (routeId === this.selectedRouteId) {
+                        item.classList.add('selected');
+                    } else {
+                        item.classList.remove('selected');
+                    }
+                });
+            }
+            
+            updateUI() {
+                // Show/hide sections
+                if (this.containers.length > 0) {
+                    document.getElementById('stats-section').classList.remove('hidden');
+                    document.getElementById('params-section').classList.remove('hidden');
+                    document.getElementById('settings-section').classList.remove('hidden');
+                    document.getElementById('rajon-section').classList.remove('hidden');
+                    document.getElementById('actions-section').classList.remove('hidden');
+                }
+                
+                // Update stats
+                document.getElementById('stat-containers').textContent = this.containers.length;
+                document.getElementById('stat-routes').textContent = this.routes.length;
+                
+                // Update waste type stats
+                const paperCount = this.containers.filter(c => c.wasteType === 'paper').length;
+                const plasticCount = this.containers.filter(c => c.wasteType === 'plastic').length;
+                document.getElementById('stat-paper').textContent = paperCount;
+                document.getElementById('stat-plastic').textContent = plasticCount;
+                
+                // Show/hide routes section
+                if (this.routes.length > 0) {
+                    document.getElementById('routes-section').classList.remove('hidden');
+                    document.getElementById('exportBtn').classList.remove('hidden');
+                    document.getElementById('total-stats').classList.add('visible');
+                    
+                    // Calculate totals
+                    const totals = this.routes.reduce((acc, route) => ({
+                        totalDistance: acc.totalDistance + route.distance,
+                        totalTime: acc.totalTime + route.totalTime,
+                        totalStops: acc.totalStops + route.stops.length,
+                        customerStops: acc.customerStops + (route.customerStops || 0),
+                        standardStops: acc.standardStops + (route.standardStops || 0)
+                    }), { totalDistance: 0, totalTime: 0, totalStops: 0, customerStops: 0, standardStops: 0 });
+                    
+                    document.getElementById('total-distance').textContent = totals.totalDistance.toFixed(1) + ' km';
+                    document.getElementById('total-time').textContent = (totals.totalTime / 60).toFixed(1) + ' hod';
+                    document.getElementById('total-stops').textContent = totals.totalStops;
+                    
+                    // Update routes list s kategorií
+                    const routesList = document.getElementById('routesList');
+                    routesList.innerHTML = this.routes.map(route => {
+                        const categoryBadge = route.category ? 
+                            `<div class="route-category">${route.category}</div>` : '';
+                        const customerInfo = route.customerStops > 0 ? 
+                            `<span style="color: var(--warning);">🏠 ${route.customerStops}</span>` : '';
+                        
+                        return `
+                            <div class="route-item" data-route-id="${route.id}">
+                                <div class="route-item-header">
+                                    <span class="route-number">Trasa ${route.id}</span>
+                                    <span class="route-stops">${route.stops.length} zastávek ${customerInfo}</span>
+                                </div>
+                                ${categoryBadge}
+                                <div class="route-time">
+                                    ⏱️ ${(route.totalTime / 60).toFixed(1)}h | 🚗 ${route.distance.toFixed(1)}km
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // Attach click handlers
+                    routesList.querySelectorAll('.route-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const routeId = parseInt(item.dataset.routeId);
+                            const route = this.routes.find(r => r.id === routeId);
+                            if (route) {
+                                this.displayRoute(route);
+                            }
+                        });
+                    });
+                }
+            }
+            
+            exportRoutes() {
+                if (this.routes.length === 0) {
+                    this.showError('Nejsou trasy k exportu');
+                    return;
+                }
+                
+                const exportData = this.routes.map(route => {
+                    return {
+                        'Trasa': route.id,
+                        'Kategorie': route.category || '',
+                        'Počet zastávek': route.stops.length,
+                        'Standardní nádoby': route.standardStops || 0,
+                        'Zákaznické nádoby': route.customerStops || 0,
+                        'Vzdálenost z depa (km)': (route.distanceFromDepot || 0).toFixed(2),
+                        'Vzdálenost do depa (km)': (route.distanceToDepot || 0).toFixed(2),
+                        'Celková vzdálenost (km)': route.distance.toFixed(2),
+                        'Čas jízdy (min)': route.drivingTime.toFixed(0),
+                        'Čas vysypání (min)': route.emptyingTime.toFixed(0),
+                        'Celkový čas (min)': route.totalTime.toFixed(0),
+                        'Celkový čas (hod)': (route.totalTime / 60).toFixed(2),
+                        'OSRM trasa': route.isOSRM ? 'Ano' : 'Ne'
+                    };
+                });
+                
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Souhrn tras');
+                
+                const detailData = [];
+                this.routes.forEach(route => {
+                    route.stops.forEach((stop, idx) => {
+                        const wasteTypeLabel = stop.wasteType === 'paper' ? 'Papír' : 
+                                             stop.wasteType === 'plastic' ? 'Plast' : 
+                                             'Ostatní';
+                        
+                        const contractCategoryLabel = this.getContractCategoryLabel(stop.contractCategory);
+                        
+                        detailData.push({
+                            'Trasa': route.id,
+                            'Kategorie trasy': route.category || '',
+                            'Pořadí': idx + 1,
+                            'ID nádoby': stop.id,
+                            'Typ odpadu': wasteTypeLabel,
+                            'Objem (L)': stop.volume,
+                            'Smlouva': stop.contractId || '',
+                            'Kategorie smlouvy': contractCategoryLabel,
+                            'Zákaznická nádoba': stop.isCustomerContainer ? 'Ano' : 'Ne',
+                            'Zákazník': stop.customer || '',
+                            'Stanoviště': stop.locationName || '',
+                            'Poznámka': stop.driverNote || '',
+                            'Latitude': stop.lat,
+                            'Longitude': stop.lng
+                        });
+                    });
+                });
+                
+                const wsDetail = XLSX.utils.json_to_sheet(detailData);
+                XLSX.utils.book_append_sheet(wb, wsDetail, 'Detail tras');
+                
+                // Přidám sheet s parametry
+                const paramsData = [{
+                    'Parametr': 'Výchozí bod (depo) - Lat',
+                    'Hodnota': this.depot ? this.depot.lat : 'Nenastaveno',
+                    'Jednotka': ''
+                }, {
+                    'Parametr': 'Výchozí bod (depo) - Lng',
+                    'Hodnota': this.depot ? this.depot.lng : 'Nenastaveno',
+                    'Jednotka': ''
+                }, {
+                    'Parametr': 'Čas vysypání - standardní',
+                    'Hodnota': this.emptyTime,
+                    'Jednotka': 'sekund'
+                }, {
+                    'Parametr': 'Čas vysypání - zákazník',
+                    'Hodnota': this.emptyTimeCustomer,
+                    'Jednotka': 'sekund'
+                }, {
+                    'Parametr': 'Průměrná rychlost',
+                    'Hodnota': this.avgSpeed,
+                    'Jednotka': 'km/h'
+                }, {
+                    'Parametr': 'Max. zastávek na trasu',
+                    'Hodnota': this.maxStopsPerRoute,
+                    'Jednotka': ''
+                }, {
+                    'Parametr': 'Počet vozidel',
+                    'Hodnota': this.vehicleCount,
+                    'Jednotka': ''
+                }, {
+                    'Parametr': 'Varianta rajonizace',
+                    'Hodnota': this.rajonVariant,
+                    'Jednotka': ''
+                }, {
+                    'Parametr': 'Optimalizační algoritmus',
+                    'Hodnota': this.algorithmType === 'fast' ? 'Rychlý (NN)' : 
+                              this.algorithmType === 'balanced' ? 'Balanced (NN + 2-opt)' : 
+                              'Kvalitní (NN + 2-opt + Or-opt)',
+                    'Jednotka': ''
+                }, {
+                    'Parametr': 'Routing provider',
+                    'Hodnota': this.routingProvider === 'here' ? 'HERE Maps' : 'OSRM (open source)',
+                    'Jednotka': ''
+                }];
+                
+                const wsParams = XLSX.utils.json_to_sheet(paramsData);
+                XLSX.utils.book_append_sheet(wb, wsParams, 'Parametry');
+                
+                XLSX.writeFile(wb, 'svozove_trasy_rajonizace.xlsx');
+                this.showSuccess('✓ Export dokončen');
+            }
+            
+            getContractCategoryLabel(category) {
+                switch(category) {
+                    case 'mp002_new': return 'MP002 (nový 14denní)';
+                    case 'mp002d': return 'MP002D (stávající)';
+                    case 'customer_7': return 'Zákazník (7...)';
+                    case 'zc': return 'ZC';
+                    default: return 'Ostatní';
+                }
+            }
+            
+            // Progress bar funkce
+            showProgress() {
+                document.getElementById('progressContainer').classList.remove('hidden');
+            }
+            
+            hideProgress() {
+                document.getElementById('progressContainer').classList.add('hidden');
+                this.updateProgress(0, '');
+            }
+            
+            updateProgress(percent, text) {
+                const fill = document.getElementById('progressFill');
+                const textEl = document.getElementById('progressText');
+                fill.style.width = percent + '%';
+                textEl.textContent = text || (percent + '%');
+            }
+            
+            showError(message) {
+                const messagesDiv = document.getElementById('messages');
+                messagesDiv.innerHTML = `<div class="error-message">${message}</div>`;
+            }
+            
+            showSuccess(message) {
+                const messagesDiv = document.getElementById('messages');
+                messagesDiv.innerHTML = `<div class="success-message">${message}</div>`;
+            }
+            
+            clearMessages() {
+                document.getElementById('messages').innerHTML = '';
+            }
+        }
+        
+        window.addEventListener('load', () => {
+            new RouteOptimizer();
+        });
+    </script>
+</body>
+</html>

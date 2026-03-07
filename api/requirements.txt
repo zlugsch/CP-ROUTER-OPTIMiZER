@@ -1,0 +1,33 @@
+# CP Router Optimizer - API Dependencies
+
+# Web framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+
+# HTTP client
+httpx==0.26.0
+
+# Data processing
+numpy==1.26.4
+pandas==2.2.0
+
+# Validation
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Async
+anyio==4.2.0
+
+# Logging & Monitoring
+loguru==0.7.2
+prometheus-client==0.19.0
+
+# Utils
+python-dotenv==1.0.1
+orjson==3.9.13
+
+# Testing (dev)
+pytest==8.0.0
+pytest-asyncio==0.23.4
+httpx==0.26.0

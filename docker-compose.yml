@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # OSRM - Open Source Routing Machine
+  # Lokální routing server s truck profilem
+  # ============================================
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: cp-osrm
+    restart: unless-stopped
+    ports:
+      - "5050:5000"
+    volumes:
+      - ./osrm/data:/data
+    command: osrm-routed --algorithm mld /data/czech-republic-latest.osrm
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - router-network
+
+  # ============================================
+  # NVIDIA cuOpt - GPU-akcelerovaný VRP solver
+  # Vyžaduje NVIDIA Container Toolkit
+  # ============================================
+  cuopt:
+    image: nvcr.io/nvidia/cuopt/cuopt:24.03
+    container_name: cp-cuopt
+    restart: unless-stopped
+    ports:
+      - "9080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUOPT_SERVER_PORT=8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/cuopt/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - router-network
+
+  # ============================================
+  # API Server - FastAPI backend
+  # Spojuje OSRM + cuOpt + business logiku
+  # ============================================
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: cp-api
+    restart: unless-stopped
+    ports:
+      - "8888:8000"
+    environment:
+      - OSRM_URL=http://osrm:5000
+      - CUOPT_URL=http://cuopt:8080
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+    depends_on:
+      - osrm
+      - cuopt
+    volumes:
+      - ./api:/app
+      - ./logs:/app/logs
+    networks:
+      - router-network
+
+  # ============================================
+  # Webapp - Statický web server (Nginx)
+  # Slouží webovou aplikaci RouteOptimizer
+  # ============================================
+  webapp:
+    image: nginx:alpine
+    container_name: cp-webapp
+    restart: unless-stopped
+    ports:
+      - "8880:80"
+    volumes:
+      - ./webapp:/usr/share/nginx/html:ro
+      - ./webapp/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    networks:
+      - router-network
+
+  # ============================================
+  # Watchtower - Automatické aktualizace
+  # (volitelné)
+  # ============================================
+  watchtower:
+    image: containrrr/watchtower
+    container_name: cp-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=86400
+    profiles:
+      - monitoring
+
+networks:
+  router-network:
+    driver: bridge
+
+volumes:
+  osrm-data:
+  logs:

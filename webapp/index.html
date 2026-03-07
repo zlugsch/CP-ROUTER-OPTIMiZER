@@ -1064,6 +1064,7 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
     <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
     <script>
@@ -1101,6 +1102,7 @@
                 this.map = null;
                 this.markers = [];
                 this.polyline = null;
+                this.routePolylines = []; // Pole pro všechny polylines tras
                 this.depotMarker = null; // Marker pro depo
                 
                 this.initMap();
@@ -1741,6 +1743,53 @@
                     this.map.removeLayer(this.polyline);
                     this.polyline = null;
                 }
+                
+                // Smaž všechny route polylines
+                this.routePolylines.forEach(p => {
+                    if (p && this.map.hasLayer(p)) {
+                        this.map.removeLayer(p);
+                    }
+                });
+                this.routePolylines = [];
+            }
+            
+            // Přidá polyline se šipkami směru na mapu
+            addRoutePolyline(coordinates, color = '#00d4aa', weight = 4, dashed = false) {
+                const polylineOptions = {
+                    color: color,
+                    weight: weight,
+                    opacity: 0.8
+                };
+                
+                if (dashed) {
+                    polylineOptions.dashArray = '5, 10';
+                }
+                
+                const polyline = L.polyline(coordinates, polylineOptions).addTo(this.map);
+                this.routePolylines.push(polyline);
+                
+                // Přidej šipky pro směr jízdy
+                const decorator = L.polylineDecorator(polyline, {
+                    patterns: [
+                        {
+                            offset: 25,
+                            repeat: 100,
+                            symbol: L.Symbol.arrowHead({
+                                pixelSize: 12,
+                                polygon: false,
+                                pathOptions: {
+                                    stroke: true,
+                                    color: color,
+                                    weight: 2,
+                                    opacity: 0.9
+                                }
+                            })
+                        }
+                    ]
+                }).addTo(this.map);
+                this.routePolylines.push(decorator);
+                
+                return polyline;
             }
             
             calculateDistance(lat1, lng1, lat2, lng2) {
@@ -3116,11 +3165,7 @@
                 }
                 
                 if (allCoordinates.length > 0) {
-                    this.polyline = L.polyline(allCoordinates, {
-                        color: '#00d4aa',
-                        weight: 4,
-                        opacity: 0.8
-                    }).addTo(this.map);
+                    this.addRoutePolyline(allCoordinates, '#00d4aa', 4);
                     
                     route.actualDistance = totalDistance;
                     route.actualDrivingTime = totalDuration;
@@ -3142,11 +3187,7 @@
                     const geometry = data.routes[0].geometry;
                     const routeCoords = geometry.coordinates.map(coord => [coord[1], coord[0]]);
                     
-                    this.polyline = L.polyline(routeCoords, {
-                        color: '#00d4aa',
-                        weight: 4,
-                        opacity: 0.8
-                    }).addTo(this.map);
+                    this.addRoutePolyline(routeCoords, '#00d4aa', 4);
                     
                     route.actualDistance = data.routes[0].distance / 1000;
                     route.actualDrivingTime = data.routes[0].duration / 60;
@@ -3168,11 +3209,7 @@
                     const routeGeometry = data.routes[0].geometry;
                     const routeCoordinates = routeGeometry.coordinates.map(coord => [coord[1], coord[0]]);
                     
-                    this.polyline = L.polyline(routeCoordinates, {
-                        color: '#00d4aa',
-                        weight: 4,
-                        opacity: 0.8
-                    }).addTo(this.map);
+                    this.addRoutePolyline(routeCoordinates, '#00d4aa', 4);
                     
                     // Aktualizuj vzdálenost a čas podle OSRM
                     const actualDistance = data.routes[0].distance / 1000; // km
@@ -3219,12 +3256,7 @@
                     routeCoords.push([this.depot.lat, this.depot.lng]);
                 }
                 
-                this.polyline = L.polyline(routeCoords, {
-                    color: '#00d4aa',
-                    weight: 3,
-                    opacity: 0.8,
-                    dashArray: '5, 10'
-                }).addTo(this.map);
+                this.addRoutePolyline(routeCoords, '#00d4aa', 3, true);
                 
                 this.hideLoadingOverlay();
             }

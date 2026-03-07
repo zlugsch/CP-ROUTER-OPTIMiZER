@@ -24,7 +24,7 @@ GPU-akcelerovaný optimalizátor svozových tras pro odpadové hospodářství.
 │                    UBUNTU SERVER                            │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐  │
 │  │   OSRM      │    │  NVIDIA     │    │   FastAPI       │  │
-│  │   Server    │───▶│  cuOpt      │───▶│   Backend       │  │
+│  │   Server    │──▶│  cuOpt      |──▶ │   Backend       │  │
 │  │  :5050      │    │  :9080      │    │   :8888         │  │
 │  └─────────────┘    └─────────────┘    └─────────────────┘  │
 │        │                  │                    │            │
@@ -43,7 +43,6 @@ GPU-akcelerovaný optimalizátor svozových tras pro odpadové hospodářství.
 ### Prerekvizity
 
 - Ubuntu 22.04+ 
-- Docker & Docker Compose
 - NVIDIA Driver 525+
 - NVIDIA Container Toolkit
 

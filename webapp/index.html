@@ -2128,7 +2128,7 @@
                         // Pro krátké trasy jeden požadavek
                         if (allPoints.length <= 100) {
                             const coordinates = allPoints.map(p => `${p.lng},${p.lat}`).join(';');
-                            const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false`;
+                            const url = `/osrm/route/v1/driving/${coordinates}?overview=false`;
                             
                             const response = await fetch(url);
                             const data = await response.json();
@@ -2170,7 +2170,7 @@
                     if (segmentPoints.length < 2) continue;
                     
                     const coordinates = segmentPoints.map(p => `${p.lng},${p.lat}`).join(';');
-                    const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false`;
+                    const url = `/osrm/route/v1/driving/${coordinates}?overview=false`;
                     
                     try {
                         const response = await fetch(url);
@@ -3135,7 +3135,7 @@
                     const coordinates = segment.map(p => `${p.lng},${p.lat}`).join(';');
                     
                     try {
-                        const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+                        const url = `/osrm/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
                         const response = await fetch(url);
                         const data = await response.json();
                         
@@ -3178,7 +3178,7 @@
             }
             
             async fetchAndDrawRouteWithDepot(route, coordinates) {
-                const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+                const url = `/osrm/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
                 
                 const response = await fetch(url);
                 const data = await response.json();
@@ -3200,7 +3200,7 @@
             }
             
             async fetchAndDrawRoute(route, coordinates) {
-                const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+                const url = `/osrm/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
                 
                 const response = await fetch(url);
                 const data = await response.json();

@@ -2125,14 +2125,6 @@
                 if (mp002Containers.length > 0) {
                     const sortedMP002 = this.sortBySweepAngle(mp002Containers);
                     const unvisitedMP002 = [...sortedMP002];
-                let routeNumber = 1;
-                
-                const totalContainers = containers.length;
-                let processedContainers = 0;
-                
-                // Nejprve MP002 trasy
-                if (mp002Containers.length > 0) {
-                    const unvisitedMP002 = [...mp002Containers];
                     
                     while (unvisitedMP002.length > 0) {
                         const route = this.createRoute(unvisitedMP002, routeNumber, this.maxRouteDuration);

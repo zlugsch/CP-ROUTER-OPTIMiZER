@@ -2071,10 +2071,12 @@
             
             // Varianta 1 s progress barem
             async optimizeVariant1WithProgress(containers) {
+                console.log('🚀 optimizeVariant1WithProgress started, containers:', containers.length);
                 const optimizedRoutes = [];
                 
                 // SWEEP SORT - seřaď kontejnery podle úhlu od depa
                 const sortedContainers = this.sortBySweepAngle(containers);
+                console.log('✅ Sweep sort done, sorted:', sortedContainers.length);
                 const unvisited = [...sortedContainers];
                 
                 let routeNumber = 1;
@@ -2083,9 +2085,18 @@
                 // Odhad počtu tras podle časového limitu
                 const avgStopsPerRoute = Math.ceil(this.maxRouteDuration / 5); // ~5 min na zastávku
                 const expectedRoutes = Math.max(this.vehicleCount, Math.ceil(totalContainers / avgStopsPerRoute));
+                console.log('📊 Expected routes:', expectedRoutes, 'maxRouteDuration:', this.maxRouteDuration);
                 
                 while (unvisited.length > 0) {
+                    console.log(`📍 Creating route ${routeNumber}, remaining: ${unvisited.length}`);
                     const route = this.createRoute(unvisited, routeNumber, this.maxRouteDuration);
+                    console.log(`✅ Route ${routeNumber} created with ${route.stops.length} stops`);
+                    
+                    if (route.stops.length === 0) {
+                        console.error('❌ Empty route created, breaking loop');
+                        break;
+                    }
+                    
                     optimizedRoutes.push(route);
                     
                     // Update progress (5-70% je pro vytváření tras)
@@ -2100,8 +2111,15 @@
                     }
                     
                     routeNumber++;
+                    
+                    // Ochrana proti nekonečné smyčce
+                    if (routeNumber > 500) {
+                        console.error('❌ Too many routes, breaking');
+                        break;
+                    }
                 }
                 
+                console.log('🏁 optimizeVariant1WithProgress done, routes:', optimizedRoutes.length);
                 return optimizedRoutes;
             }
             
@@ -2604,6 +2622,8 @@
                     distanceToDepot: 0
                 };
                 
+                if (unvisited.length === 0) return route;
+                
                 let current;
                 let accumulatedTime = 0; // Akumulovaný čas v minutách
                 const avgSpeedKmH = this.avgSpeed || 30; // Průměrná rychlost v km/h
@@ -2618,6 +2638,7 @@
                     const searchFirst = Math.min(10, unvisited.length);
                     for (let idx = 0; idx < searchFirst; idx++) {
                         const container = unvisited[idx];
+                        if (!container || !container.lat || !container.lng) continue;
                         const dist = this.calculateDistance(
                             this.depot.lat, this.depot.lng,
                             container.lat, container.lng
@@ -2636,6 +2657,9 @@
                         route.distance += minDistFromDepot;
                         // Přidej čas jízdy z depa
                         accumulatedTime += (minDistFromDepot / avgSpeedKmH) * 60;
+                    } else {
+                        // Fallback - vezmi první element
+                        current = unvisited.shift();
                     }
                 } else {
                     // Bez depa - začni první nádobou
@@ -2671,6 +2695,7 @@
                     const searchWindow = Math.min(localWindowSize, unvisited.length);
                     for (let idx = 0; idx < searchWindow; idx++) {
                         const container = unvisited[idx];
+                        if (!container || !container.lat || !container.lng) continue;
                         const dist = this.calculateDistance(
                             current.lat, current.lng,
                             container.lat, container.lng

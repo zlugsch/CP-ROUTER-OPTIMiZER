@@ -650,6 +650,99 @@
             justify-content: center;
         }
 
+        /* Animace trasy */
+        .animation-controls {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        
+        .animation-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .btn-anim {
+            padding: 8px 16px;
+            font-size: 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-anim:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+        
+        .animation-speed {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .animation-speed input[type="range"] {
+            flex: 1;
+            height: 4px;
+            -webkit-appearance: none;
+            background: var(--border);
+            border-radius: 2px;
+        }
+        
+        .animation-speed input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--accent-primary);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .animation-progress {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .progress-bar-anim {
+            flex: 1;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill-anim {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        
+        #animProgressText {
+            font-size: 11px;
+            color: var(--text-secondary);
+            min-width: 35px;
+        }
+        
+        /* Animovaný marker auta */
+        .truck-marker {
+            background: none;
+            border: none;
+        }
+        
+        .truck-icon {
+            font-size: 28px;
+            filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.5));
+            transition: transform 0.1s;
+        }
+
         .btn-toggle-legend {
             padding: 8px 12px;
             font-size: 11px;
@@ -848,8 +941,9 @@
                         </div>
                         
                         <div class="input-group">
-                            <label class="input-label">Max. zastávek na trasu</label>
-                            <input type="number" class="input-field" id="maxStops" value="100"/>
+                            <label class="input-label">Max. doba trasy (min)</label>
+                            <input type="number" class="input-field" id="maxRouteDuration" value="360"/>
+                            <small style="color: var(--text-muted); font-size: 11px;">Doporučeno 360 min (6 hodin)</small>
                         </div>
                         
                         <div class="input-group">
@@ -965,6 +1059,24 @@
                     <button class="btn-reset" id="resetViewBtn">Zobrazit vše</button>
                 </div>
                 <div class="route-info" id="overlayContent"></div>
+                <div class="animation-controls" id="animationControls">
+                    <div class="animation-buttons">
+                        <button class="btn-anim" id="playAnimBtn" title="Spustit animaci">▶️</button>
+                        <button class="btn-anim" id="pauseAnimBtn" title="Pozastavit" style="display:none;">⏸️</button>
+                        <button class="btn-anim" id="stopAnimBtn" title="Zastavit">⏹️</button>
+                    </div>
+                    <div class="animation-speed">
+                        <label>Rychlost:</label>
+                        <input type="range" id="animSpeed" min="1" max="10" value="5" />
+                        <span id="animSpeedLabel">5x</span>
+                    </div>
+                    <div class="animation-progress">
+                        <div class="progress-bar-anim" id="animProgressBar">
+                            <div class="progress-fill-anim" id="animProgressFill"></div>
+                        </div>
+                        <span id="animProgressText">0%</span>
+                    </div>
+                </div>
             </div>
             
             <button class="btn-toggle-legend" id="toggleLegendBtn">📋 Legenda</button>
@@ -1083,7 +1195,7 @@
                 this.emptyTime = 20; // Standardní čas vysypání
                 this.emptyTimeCustomer = 120; // Čas pro zákaznické nádoby
                 this.avgSpeed = 20;
-                this.maxStopsPerRoute = 100;
+                this.maxRouteDuration = 360; // Max doba trasy v minutách (6 hodin)
                 this.vehicleCount = 3;
                 this.algorithmType = 'balanced'; // fast, balanced, quality
                 this.routingProvider = 'local'; // local, osrm, here
@@ -1104,6 +1216,15 @@
                 this.polyline = null;
                 this.routePolylines = []; // Pole pro všechny polylines tras
                 this.depotMarker = null; // Marker pro depo
+                
+                // Animace
+                this.animationMarker = null;
+                this.animationPolyline = null;
+                this.animationInterval = null;
+                this.animationCoords = [];
+                this.animationIndex = 0;
+                this.animationSpeed = 5;
+                this.isAnimating = false;
                 
                 this.initMap();
                 this.attachEventListeners();
@@ -1152,8 +1273,8 @@
                     this.avgSpeed = Number(e.target.value);
                 });
                 
-                document.getElementById('maxStops').addEventListener('change', (e) => {
-                    this.maxStopsPerRoute = Number(e.target.value);
+                document.getElementById('maxRouteDuration').addEventListener('change', (e) => {
+                    this.maxRouteDuration = Number(e.target.value);
                 });
                 
                 document.getElementById('vehicleCount').addEventListener('change', (e) => {
@@ -1243,6 +1364,24 @@
                 
                 document.getElementById('closeLegendBtn').addEventListener('click', () => {
                     this.closeLegend();
+                });
+                
+                // Animační ovládání
+                document.getElementById('playAnimBtn').addEventListener('click', () => {
+                    this.startAnimation();
+                });
+                
+                document.getElementById('pauseAnimBtn').addEventListener('click', () => {
+                    this.pauseAnimation();
+                });
+                
+                document.getElementById('stopAnimBtn').addEventListener('click', () => {
+                    this.stopAnimation();
+                });
+                
+                document.getElementById('animSpeed').addEventListener('input', (e) => {
+                    this.animationSpeed = Number(e.target.value);
+                    document.getElementById('animSpeedLabel').textContent = this.animationSpeed + 'x';
                 });
             }
             
@@ -1897,13 +2036,12 @@
                 let routeNumber = 1;
                 
                 const totalContainers = unvisited.length;
-                const containersPerVehicle = Math.ceil(totalContainers / this.vehicleCount);
-                const stopsPerRoute = Math.min(this.maxStopsPerRoute, Math.ceil(containersPerVehicle / 2));
-                
-                const expectedRoutes = Math.ceil(totalContainers / stopsPerRoute);
+                // Odhad počtu tras podle časového limitu
+                const avgStopsPerRoute = Math.ceil(this.maxRouteDuration / 5); // ~5 min na zastávku
+                const expectedRoutes = Math.max(this.vehicleCount, Math.ceil(totalContainers / avgStopsPerRoute));
                 
                 while (unvisited.length > 0) {
-                    const route = this.createRoute(unvisited, routeNumber, stopsPerRoute);
+                    const route = this.createRoute(unvisited, routeNumber, this.maxRouteDuration);
                     optimizedRoutes.push(route);
                     
                     // Update progress (5-70% je pro vytváření tras)
@@ -1942,10 +2080,9 @@
                 // Nejprve MP002 trasy
                 if (mp002Containers.length > 0) {
                     const unvisitedMP002 = [...mp002Containers];
-                    const stopsPerRoute = Math.min(this.maxStopsPerRoute, 80);
                     
                     while (unvisitedMP002.length > 0) {
-                        const route = this.createRoute(unvisitedMP002, routeNumber, stopsPerRoute);
+                        const route = this.createRoute(unvisitedMP002, routeNumber, this.maxRouteDuration);
                         route.category = 'MP002';
                         optimizedRoutes.push(route);
                         
@@ -1964,10 +2101,9 @@
                 // Pak ostatní trasy
                 if (otherContainers.length > 0) {
                     const unvisitedOther = [...otherContainers];
-                    const stopsPerRoute = Math.min(this.maxStopsPerRoute, Math.ceil(otherContainers.length / this.vehicleCount / 2));
                     
                     while (unvisitedOther.length > 0) {
-                        const route = this.createRoute(unvisitedOther, routeNumber, stopsPerRoute);
+                        const route = this.createRoute(unvisitedOther, routeNumber, this.maxRouteDuration);
                         route.category = 'Ostatní';
                         optimizedRoutes.push(route);
                         
@@ -2356,11 +2492,9 @@
                 
                 // Počet tras na vozidlo
                 const totalContainers = unvisited.length;
-                const containersPerVehicle = Math.ceil(totalContainers / this.vehicleCount);
-                const stopsPerRoute = Math.min(this.maxStopsPerRoute, Math.ceil(containersPerVehicle / 2));
                 
                 while (unvisited.length > 0) {
-                    const route = this.createRoute(unvisited, routeNumber, stopsPerRoute);
+                    const route = this.createRoute(unvisited, routeNumber, this.maxRouteDuration);
                     optimizedRoutes.push(route);
                     routeNumber++;
                 }
@@ -2379,11 +2513,9 @@
                 
                 // Optimalizace MP002 nádob
                 const mp002Unvisited = [...mp002Containers];
-                const mp002StopsPerRoute = Math.min(this.maxStopsPerRoute, 
-                    Math.ceil(mp002Containers.length / Math.ceil(this.vehicleCount / 2)));
                 
                 while (mp002Unvisited.length > 0) {
-                    const route = this.createRoute(mp002Unvisited, routeNumber, mp002StopsPerRoute);
+                    const route = this.createRoute(mp002Unvisited, routeNumber, this.maxRouteDuration);
                     route.category = 'MP002 (nový režim)';
                     optimizedRoutes.push(route);
                     routeNumber++;
@@ -2391,11 +2523,9 @@
                 
                 // Optimalizace ostatních nádob
                 const otherUnvisited = [...otherContainers];
-                const otherStopsPerRoute = Math.min(this.maxStopsPerRoute,
-                    Math.ceil(otherContainers.length / Math.ceil(this.vehicleCount / 2)));
                 
                 while (otherUnvisited.length > 0) {
-                    const route = this.createRoute(otherUnvisited, routeNumber, otherStopsPerRoute);
+                    const route = this.createRoute(otherUnvisited, routeNumber, this.maxRouteDuration);
                     route.category = 'Ostatní (stávající režim)';
                     optimizedRoutes.push(route);
                     routeNumber++;
@@ -2404,8 +2534,8 @@
                 return optimizedRoutes;
             }
             
-            // Vytvoření jedné trasy pomocí nearest neighbor
-            createRoute(unvisited, routeNumber, maxStops) {
+            // Vytvoření jedné trasy pomocí nearest neighbor s časovým omezením
+            createRoute(unvisited, routeNumber, maxDurationMinutes) {
                 const route = {
                     id: routeNumber,
                     stops: [],
@@ -2421,6 +2551,8 @@
                 };
                 
                 let current;
+                let accumulatedTime = 0; // Akumulovaný čas v minutách
+                const avgSpeedKmH = this.avgSpeed || 30; // Průměrná rychlost v km/h
                 
                 // Pokud máme depo, najdi nejbližší nádobu k depu
                 if (this.depot && unvisited.length > 0) {
@@ -2445,6 +2577,8 @@
                         unvisited.splice(nearestIdx, 1);
                         route.distanceFromDepot = minDistFromDepot;
                         route.distance += minDistFromDepot;
+                        // Přidej čas jízdy z depa
+                        accumulatedTime += (minDistFromDepot / avgSpeedKmH) * 60;
                     }
                 } else {
                     // Bez depa - začni první nádobou
@@ -2455,6 +2589,11 @@
                 
                 route.stops.push(this.copyContainerData(current));
                 
+                // Přidej čas obsluhy první nádoby
+                const firstServiceTime = current.isCustomerContainer ? 2 : 0.33; // minuty
+                accumulatedTime += firstServiceTime;
+                route.emptyingTime += firstServiceTime;
+                
                 // Počítadla pro zákaznické vs. standardní nádoby
                 if (current.isCustomerContainer) {
                     route.customerStops++;
@@ -2462,7 +2601,8 @@
                     route.standardStops++;
                 }
                 
-                while (route.stops.length < maxStops && unvisited.length > 0) {
+                // Pokračuj dokud je čas (s rezervou na návrat do depa)
+                while (unvisited.length > 0) {
                     let nearest = null;
                     let minDist = Infinity;
                     let nearestIdx = -1;
@@ -2480,8 +2620,33 @@
                     });
                     
                     if (nearest) {
+                        // Spočítej čas k další zastávce
+                        const travelTime = (minDist / avgSpeedKmH) * 60;
+                        const serviceTime = nearest.isCustomerContainer ? 2 : 0.33;
+                        
+                        // Odhadni čas návratu do depa z této pozice
+                        let returnTime = 0;
+                        if (this.depot) {
+                            const distToDepot = this.calculateDistance(
+                                nearest.lat, nearest.lng,
+                                this.depot.lat, this.depot.lng
+                            );
+                            returnTime = (distToDepot / avgSpeedKmH) * 60;
+                        }
+                        
+                        // Zkontroluj jestli se vejdeme do časového limitu
+                        const projectedTime = accumulatedTime + travelTime + serviceTime + returnTime;
+                        
+                        if (projectedTime > maxDurationMinutes) {
+                            // Překročili bychom limit - ukonči trasu
+                            break;
+                        }
+                        
+                        // Přidej zastávku
                         route.stops.push(this.copyContainerData(nearest));
                         route.distance += minDist;
+                        accumulatedTime += travelTime + serviceTime;
+                        route.emptyingTime += serviceTime;
                         
                         if (nearest.isCustomerContainer) {
                             route.customerStops++;
@@ -2709,6 +2874,7 @@
             async displayRoute(route) {
                 if (!this.map) return;
                 
+                this.stopAnimation(); // Zastav předchozí animaci
                 this.selectedRouteId = route.id;
                 this.clearMap();
                 
@@ -3167,6 +3333,9 @@
                 if (allCoordinates.length > 0) {
                     this.addRoutePolyline(allCoordinates, '#00d4aa', 4);
                     
+                    // Ulož geometrii pro animaci
+                    route.osrmGeometry = allCoordinates;
+                    
                     route.actualDistance = totalDistance;
                     route.actualDrivingTime = totalDuration;
                     route.actualTotalTime = totalDuration + route.emptyingTime;
@@ -3189,6 +3358,9 @@
                     
                     this.addRoutePolyline(routeCoords, '#00d4aa', 4);
                     
+                    // Ulož geometrii pro animaci
+                    route.osrmGeometry = routeCoords;
+                    
                     route.actualDistance = data.routes[0].distance / 1000;
                     route.actualDrivingTime = data.routes[0].duration / 60;
                     route.actualTotalTime = route.actualDrivingTime + route.emptyingTime;
@@ -3210,6 +3382,9 @@
                     const routeCoordinates = routeGeometry.coordinates.map(coord => [coord[1], coord[0]]);
                     
                     this.addRoutePolyline(routeCoordinates, '#00d4aa', 4);
+                    
+                    // Ulož geometrii pro animaci
+                    route.osrmGeometry = routeCoordinates;
                     
                     // Aktualizuj vzdálenost a čas podle OSRM
                     const actualDistance = data.routes[0].distance / 1000; // km
@@ -3262,6 +3437,7 @@
             }
             
             resetMapView() {
+                this.stopAnimation(); // Zastav animaci při resetu
                 this.selectedRouteId = null;
                 this.displayContainersOnMap();
                 this.hideOverlay();
@@ -3358,6 +3534,151 @@
             hideOverlay() {
                 document.getElementById('mapOverlay').classList.remove('visible');
             }
+            
+            // === ANIMACE TRASY ===
+            
+            startAnimation() {
+                // Pokud už animace běží, pokračuj
+                if (this.isAnimating && this.animationInterval) {
+                    return;
+                }
+                
+                // Pokud je pauza, pokračuj
+                if (this.animationCoords.length > 0 && this.animationIndex > 0) {
+                    this.resumeAnimation();
+                    return;
+                }
+                
+                // Najdi aktuální trasu
+                const route = this.routes.find(r => r.id === this.selectedRouteId);
+                if (!route || !route.osrmGeometry) {
+                    console.log('⚠️ Trasa nemá OSRM geometrii pro animaci');
+                    // Použij přímé body
+                    this.animationCoords = [];
+                    if (this.depot) {
+                        this.animationCoords.push([this.depot.lat, this.depot.lng]);
+                    }
+                    route.stops.forEach(stop => {
+                        this.animationCoords.push([stop.lat, stop.lng]);
+                    });
+                    if (this.depot) {
+                        this.animationCoords.push([this.depot.lat, this.depot.lng]);
+                    }
+                } else {
+                    this.animationCoords = route.osrmGeometry;
+                }
+                
+                if (this.animationCoords.length < 2) {
+                    console.log('⚠️ Nedostatek bodů pro animaci');
+                    return;
+                }
+                
+                this.animationIndex = 0;
+                
+                // Vytvoř marker auta
+                const truckIcon = L.divIcon({
+                    className: 'truck-marker',
+                    html: '<div class="truck-icon">🚛</div>',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+                
+                this.animationMarker = L.marker(this.animationCoords[0], { 
+                    icon: truckIcon,
+                    zIndexOffset: 1000 
+                }).addTo(this.map);
+                
+                // Vytvoř polyline pro animovanou trasu
+                this.animationPolyline = L.polyline([], {
+                    color: '#ff6600',
+                    weight: 5,
+                    opacity: 0.9
+                }).addTo(this.map);
+                
+                // Přepni tlačítka
+                document.getElementById('playAnimBtn').style.display = 'none';
+                document.getElementById('pauseAnimBtn').style.display = 'inline-block';
+                
+                this.isAnimating = true;
+                this.runAnimation();
+            }
+            
+            runAnimation() {
+                const baseInterval = 100; // ms
+                const interval = baseInterval / this.animationSpeed;
+                
+                this.animationInterval = setInterval(() => {
+                    if (this.animationIndex >= this.animationCoords.length - 1) {
+                        this.stopAnimation();
+                        return;
+                    }
+                    
+                    this.animationIndex++;
+                    const coord = this.animationCoords[this.animationIndex];
+                    
+                    // Pohni autem
+                    this.animationMarker.setLatLng(coord);
+                    
+                    // Přidej bod do polyline
+                    this.animationPolyline.addLatLng(coord);
+                    
+                    // Aktualizuj progress
+                    const progress = Math.round((this.animationIndex / (this.animationCoords.length - 1)) * 100);
+                    document.getElementById('animProgressFill').style.width = progress + '%';
+                    document.getElementById('animProgressText').textContent = progress + '%';
+                    
+                    // Volitelně: sleduj auto
+                    // this.map.panTo(coord);
+                    
+                }, interval);
+            }
+            
+            pauseAnimation() {
+                if (this.animationInterval) {
+                    clearInterval(this.animationInterval);
+                    this.animationInterval = null;
+                }
+                this.isAnimating = false;
+                
+                document.getElementById('playAnimBtn').style.display = 'inline-block';
+                document.getElementById('pauseAnimBtn').style.display = 'none';
+            }
+            
+            resumeAnimation() {
+                this.isAnimating = true;
+                document.getElementById('playAnimBtn').style.display = 'none';
+                document.getElementById('pauseAnimBtn').style.display = 'inline-block';
+                this.runAnimation();
+            }
+            
+            stopAnimation() {
+                if (this.animationInterval) {
+                    clearInterval(this.animationInterval);
+                    this.animationInterval = null;
+                }
+                
+                if (this.animationMarker) {
+                    this.map.removeLayer(this.animationMarker);
+                    this.animationMarker = null;
+                }
+                
+                if (this.animationPolyline) {
+                    this.map.removeLayer(this.animationPolyline);
+                    this.animationPolyline = null;
+                }
+                
+                this.animationCoords = [];
+                this.animationIndex = 0;
+                this.isAnimating = false;
+                
+                // Reset UI
+                document.getElementById('playAnimBtn').style.display = 'inline-block';
+                document.getElementById('pauseAnimBtn').style.display = 'none';
+                document.getElementById('animProgressFill').style.width = '0%';
+                document.getElementById('animProgressText').textContent = '0%';
+            }
+            
+            // === KONEC ANIMACE ===
             
             updateRouteSelection() {
                 const items = document.querySelectorAll('.route-item');
@@ -3526,8 +3847,8 @@
                     'Hodnota': this.avgSpeed,
                     'Jednotka': 'km/h'
                 }, {
-                    'Parametr': 'Max. zastávek na trasu',
-                    'Hodnota': this.maxStopsPerRoute,
+                    'Parametr': 'Max. doba trasy',
+                    'Hodnota': this.maxRouteDuration + ' min',
                     'Jednotka': ''
                 }, {
                     'Parametr': 'Počet vozidel',

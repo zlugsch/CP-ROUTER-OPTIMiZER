@@ -1931,6 +1931,46 @@
                 return polyline;
             }
             
+            // Spočítá úhel bodu od depa (pro Sweep Algorithm)
+            calculateSweepAngle(lat, lng) {
+                if (!this.depot) return 0;
+                const dLat = lat - this.depot.lat;
+                const dLng = lng - this.depot.lng;
+                // atan2 vrací úhel v radiánech (-PI až PI)
+                let angle = Math.atan2(dLng, dLat);
+                // Převeď na stupně (0-360)
+                angle = angle * (180 / Math.PI);
+                if (angle < 0) angle += 360;
+                return angle;
+            }
+            
+            // Seřadí kontejnery podle úhlu od depa (Sweep Algorithm)
+            sortBySweepAngle(containers) {
+                if (!this.depot) return containers;
+                
+                // Přidej úhel ke každému kontejneru
+                const withAngles = containers.map(c => {
+                    const newObj = Object.assign({}, c);
+                    newObj.sweepAngle = this.calculateSweepAngle(c.lat, c.lng);
+                    newObj.distFromDepot = this.calculateDistance(this.depot.lat, this.depot.lng, c.lat, c.lng);
+                    return newObj;
+                });
+                
+                // Seřaď primárně podle úhlu, sekundárně podle vzdálenosti
+                withAngles.sort((a, b) => {
+                    // Rozdíl úhlů
+                    const angleDiff = a.sweepAngle - b.sweepAngle;
+                    // Pokud jsou úhly podobné (do 5°), řaď podle vzdálenosti
+                    if (Math.abs(angleDiff) < 5) {
+                        return a.distFromDepot - b.distFromDepot;
+                    }
+                    return angleDiff;
+                });
+                
+                console.log(`🔄 Sweep sort: seřazeno ${withAngles.length} kontejnerů podle úhlu od depa`);
+                return withAngles;
+            }
+            
             calculateDistance(lat1, lng1, lat2, lng2) {
                 const R = 6371;
                 const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -2032,7 +2072,11 @@
             // Varianta 1 s progress barem
             async optimizeVariant1WithProgress(containers) {
                 const optimizedRoutes = [];
-                const unvisited = [...containers];
+                
+                // SWEEP SORT - seřaď kontejnery podle úhlu od depa
+                const sortedContainers = this.sortBySweepAngle(containers);
+                const unvisited = [...sortedContainers];
+                
                 let routeNumber = 1;
                 
                 const totalContainers = unvisited.length;
@@ -2077,6 +2121,15 @@
                 const totalContainers = containers.length;
                 let processedContainers = 0;
                 
+                // Nejprve MP002 trasy - SWEEP SORTED
+                if (mp002Containers.length > 0) {
+                    const sortedMP002 = this.sortBySweepAngle(mp002Containers);
+                    const unvisitedMP002 = [...sortedMP002];
+                let routeNumber = 1;
+                
+                const totalContainers = containers.length;
+                let processedContainers = 0;
+                
                 // Nejprve MP002 trasy
                 if (mp002Containers.length > 0) {
                     const unvisitedMP002 = [...mp002Containers];
@@ -2098,9 +2151,10 @@
                     }
                 }
                 
-                // Pak ostatní trasy
+                // Pak ostatní trasy - SWEEP SORTED
                 if (otherContainers.length > 0) {
-                    const unvisitedOther = [...otherContainers];
+                    const sortedOther = this.sortBySweepAngle(otherContainers);
+                    const unvisitedOther = [...sortedOther];
                     
                     while (unvisitedOther.length > 0) {
                         const route = this.createRoute(unvisitedOther, routeNumber, this.maxRouteDuration);
@@ -2487,7 +2541,9 @@
             // Varianta 1: Křížové rozložení - rozdělení na vozidla s nearest neighbor
             optimizeVariant1(containers) {
                 const optimizedRoutes = [];
-                const unvisited = [...containers];
+                // SWEEP SORT
+                const sortedContainers = this.sortBySweepAngle(containers);
+                const unvisited = [...sortedContainers];
                 let routeNumber = 1;
                 
                 // Počet tras na vozidlo
@@ -2511,24 +2567,30 @@
                 const mp002Containers = containers.filter(c => c.contractCategory === 'mp002_new');
                 const otherContainers = containers.filter(c => c.contractCategory !== 'mp002_new');
                 
-                // Optimalizace MP002 nádob
-                const mp002Unvisited = [...mp002Containers];
-                
-                while (mp002Unvisited.length > 0) {
-                    const route = this.createRoute(mp002Unvisited, routeNumber, this.maxRouteDuration);
-                    route.category = 'MP002 (nový režim)';
-                    optimizedRoutes.push(route);
-                    routeNumber++;
+                // Optimalizace MP002 nádob - SWEEP SORTED
+                if (mp002Containers.length > 0) {
+                    const sortedMP002 = this.sortBySweepAngle(mp002Containers);
+                    const mp002Unvisited = [...sortedMP002];
+                    
+                    while (mp002Unvisited.length > 0) {
+                        const route = this.createRoute(mp002Unvisited, routeNumber, this.maxRouteDuration);
+                        route.category = 'MP002 (nový režim)';
+                        optimizedRoutes.push(route);
+                        routeNumber++;
+                    }
                 }
                 
-                // Optimalizace ostatních nádob
-                const otherUnvisited = [...otherContainers];
-                
-                while (otherUnvisited.length > 0) {
-                    const route = this.createRoute(otherUnvisited, routeNumber, this.maxRouteDuration);
-                    route.category = 'Ostatní (stávající režim)';
-                    optimizedRoutes.push(route);
-                    routeNumber++;
+                // Optimalizace ostatních nádob - SWEEP SORTED
+                if (otherContainers.length > 0) {
+                    const sortedOther = this.sortBySweepAngle(otherContainers);
+                    const otherUnvisited = [...sortedOther];
+                    
+                    while (otherUnvisited.length > 0) {
+                        const route = this.createRoute(otherUnvisited, routeNumber, this.maxRouteDuration);
+                        route.category = 'Ostatní (stávající režim)';
+                        optimizedRoutes.push(route);
+                        routeNumber++;
+                    }
                 }
                 
                 return optimizedRoutes;
@@ -2554,13 +2616,16 @@
                 let accumulatedTime = 0; // Akumulovaný čas v minutách
                 const avgSpeedKmH = this.avgSpeed || 30; // Průměrná rychlost v km/h
                 
-                // Pokud máme depo, najdi nejbližší nádobu k depu
+                // Pokud máme depo, najdi nejbližší nádobu k depu z prvních bodů (sweep sorted)
                 if (this.depot && unvisited.length > 0) {
                     let nearestToDepot = null;
                     let minDistFromDepot = Infinity;
                     let nearestIdx = -1;
                     
-                    unvisited.forEach((container, idx) => {
+                    // Prohledej pouze prvních pár bodů (jsou seřazené podle úhlu)
+                    const searchFirst = Math.min(10, unvisited.length);
+                    for (let idx = 0; idx < searchFirst; idx++) {
+                        const container = unvisited[idx];
                         const dist = this.calculateDistance(
                             this.depot.lat, this.depot.lng,
                             container.lat, container.lng
@@ -2570,7 +2635,7 @@
                             nearestToDepot = container;
                             nearestIdx = idx;
                         }
-                    });
+                    }
                     
                     if (nearestToDepot) {
                         current = nearestToDepot;
@@ -2602,12 +2667,18 @@
                 }
                 
                 // Pokračuj dokud je čas (s rezervou na návrat do depa)
+                // LOKÁLNÍ NN - prohledávej pouze blízké body (jsou již sweep-sorted)
+                const localWindowSize = 15; // Prohledej max 15 nejbližších úhlově
+                
                 while (unvisited.length > 0) {
                     let nearest = null;
                     let minDist = Infinity;
                     let nearestIdx = -1;
                     
-                    unvisited.forEach((container, idx) => {
+                    // Prohledej pouze lokální okno (první body v seřazeném seznamu)
+                    const searchWindow = Math.min(localWindowSize, unvisited.length);
+                    for (let idx = 0; idx < searchWindow; idx++) {
+                        const container = unvisited[idx];
                         const dist = this.calculateDistance(
                             current.lat, current.lng,
                             container.lat, container.lng
@@ -2617,7 +2688,7 @@
                             nearest = container;
                             nearestIdx = idx;
                         }
-                    });
+                    }
                     
                     if (nearest) {
                         // Spočítej čas k další zastávce

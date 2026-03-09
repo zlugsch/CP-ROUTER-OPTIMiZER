@@ -1946,7 +1946,10 @@
             
             // Seřadí kontejnery podle úhlu od depa (Sweep Algorithm)
             sortBySweepAngle(containers) {
-                if (!this.depot) return containers;
+                if (!this.depot) {
+                    console.log('⚠️ Sweep sort: bez depa, vracím původní pořadí');
+                    return containers;
+                }
                 
                 // Přidej úhel ke každému kontejneru
                 const withAngles = containers.map(c => {
@@ -1967,7 +1970,13 @@
                     return angleDiff;
                 });
                 
-                console.log(`🔄 Sweep sort: seřazeno ${withAngles.length} kontejnerů podle úhlu od depa`);
+                // Debug: ukáž prvních 10 bodů
+                console.log(`🔄 Sweep sort: seřazeno ${withAngles.length} kontejnerů`);
+                console.log('📐 Prvních 10 bodů (úhel, vzdálenost od depa):');
+                withAngles.slice(0, 10).forEach((c, i) => {
+                    console.log(`  ${i+1}. ${c.id || c.containerId}: úhel=${c.sweepAngle.toFixed(1)}°, dist=${c.distFromDepot.toFixed(2)}km, GPS=[${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}]`);
+                });
+                
                 return withAngles;
             }
             
@@ -2069,58 +2078,220 @@
                 }
             }
             
-            // Varianta 1 s progress barem
+            // Varianta 1 s progress barem - OPRAVENÝ SEKTOROVÝ ALGORITMUS
             async optimizeVariant1WithProgress(containers) {
-                console.log('🚀 optimizeVariant1WithProgress started, containers:', containers.length);
+                console.log('🚀 Optimalizace started, containers:', containers.length);
                 const optimizedRoutes = [];
                 
-                // SWEEP SORT - seřaď kontejnery podle úhlu od depa
-                const sortedContainers = this.sortBySweepAngle(containers);
-                console.log('✅ Sweep sort done, sorted:', sortedContainers.length);
-                const unvisited = [...sortedContainers];
+                if (!this.depot) {
+                    console.log('⚠️ Bez depa - použiji jednoduchý NN');
+                    const unvisited = [...containers];
+                    let routeNumber = 1;
+                    while (unvisited.length > 0) {
+                        const route = this.createRouteWithTimeLimit(unvisited, routeNumber, this.maxRouteDuration);
+                        if (route.stops.length === 0) break;
+                        optimizedRoutes.push(route);
+                        routeNumber++;
+                        if (routeNumber > 100) break;
+                    }
+                    return optimizedRoutes;
+                }
                 
+                // Přidej úhel ke každému kontejneru
+                const containersWithAngles = containers.map(c => {
+                    const newObj = Object.assign({}, c);
+                    newObj.sweepAngle = this.calculateSweepAngle(c.lat, c.lng);
+                    newObj.distFromDepot = this.calculateDistance(this.depot.lat, this.depot.lng, c.lat, c.lng);
+                    return newObj;
+                });
+                
+                // Seřaď podle úhlu
+                containersWithAngles.sort((a, b) => a.sweepAngle - b.sweepAngle);
+                
+                console.log('📐 Kontejnery seřazeny podle úhlu od depa');
+                
+                // Vytváříme trasy postupně ze seřazených kontejnerů
+                const unvisited = [...containersWithAngles];
                 let routeNumber = 1;
                 
-                const totalContainers = unvisited.length;
-                // Odhad počtu tras podle časového limitu
-                const avgStopsPerRoute = Math.ceil(this.maxRouteDuration / 5); // ~5 min na zastávku
-                const expectedRoutes = Math.max(this.vehicleCount, Math.ceil(totalContainers / avgStopsPerRoute));
-                console.log('📊 Expected routes:', expectedRoutes, 'maxRouteDuration:', this.maxRouteDuration);
-                
                 while (unvisited.length > 0) {
-                    console.log(`📍 Creating route ${routeNumber}, remaining: ${unvisited.length}`);
-                    const route = this.createRoute(unvisited, routeNumber, this.maxRouteDuration);
-                    console.log(`✅ Route ${routeNumber} created with ${route.stops.length} stops`);
+                    // Vyber startovní bod - nejbližší k depu z prvních 20 bodů
+                    const searchWindow = Math.min(20, unvisited.length);
+                    let startIdx = 0;
+                    let minDist = Infinity;
+                    
+                    for (let i = 0; i < searchWindow; i++) {
+                        if (unvisited[i].distFromDepot < minDist) {
+                            minDist = unvisited[i].distFromDepot;
+                            startIdx = i;
+                        }
+                    }
+                    
+                    // Vytvoř trasu s časovým limitem
+                    const route = this.createRouteWithTimeLimit(unvisited, routeNumber, this.maxRouteDuration, startIdx);
                     
                     if (route.stops.length === 0) {
-                        console.error('❌ Empty route created, breaking loop');
+                        console.error('❌ Prázdná trasa, ukončuji');
                         break;
                     }
                     
+                    console.log(`✅ Trasa ${routeNumber}: ${route.stops.length} zastávek, ~${route.estimatedTime.toFixed(0)} min`);
+                    
                     optimizedRoutes.push(route);
                     
-                    // Update progress (5-70% je pro vytváření tras)
-                    const progress = 5 + Math.round((routeNumber / expectedRoutes) * 65);
-                    const algText = this.algorithmType === 'fast' ? '' : 
-                                   this.algorithmType === 'balanced' ? ' + 2-opt' : ' + 2-opt + Or-opt';
-                    this.updateProgress(Math.min(progress, 70), `Trasa ${routeNumber}/${expectedRoutes}${algText}...`);
+                    const progress = 5 + Math.round((routeNumber / 20) * 65);
+                    this.updateProgress(Math.min(progress, 70), `Trasa ${routeNumber}...`);
                     
-                    // Pauza pro UI update
                     if (routeNumber % 2 === 0) {
                         await new Promise(resolve => setTimeout(resolve, 10));
                     }
                     
                     routeNumber++;
                     
-                    // Ochrana proti nekonečné smyčce
-                    if (routeNumber > 500) {
-                        console.error('❌ Too many routes, breaking');
+                    if (routeNumber > 100) {
+                        console.error('❌ Příliš mnoho tras');
                         break;
                     }
                 }
                 
-                console.log('🏁 optimizeVariant1WithProgress done, routes:', optimizedRoutes.length);
+                console.log('🏁 Hotovo, celkem tras:', optimizedRoutes.length);
                 return optimizedRoutes;
+            }
+            
+            // Vytvoření trasy s přísným časovým limitem
+            createRouteWithTimeLimit(unvisited, routeNumber, maxDurationMinutes, startIdx = 0) {
+                const route = {
+                    id: routeNumber,
+                    stops: [],
+                    distance: 0,
+                    drivingTime: 0,
+                    emptyingTime: 0,
+                    totalTime: 0,
+                    estimatedTime: 0,
+                    category: '',
+                    customerStops: 0,
+                    standardStops: 0,
+                    distanceFromDepot: 0,
+                    distanceToDepot: 0
+                };
+                
+                if (unvisited.length === 0) return route;
+                
+                // KONZERVATIVNÍ odhad - 20 km/h místo 30 (OSRM dává ~24 km/h)
+                const avgSpeedKmH = Math.min(this.avgSpeed || 20, 20);
+                let accumulatedTime = 0;
+                
+                // Vezmi startovní bod
+                let current = unvisited.splice(startIdx, 1)[0];
+                
+                if (this.depot) {
+                    route.distanceFromDepot = current.distFromDepot || this.calculateDistance(
+                        this.depot.lat, this.depot.lng, current.lat, current.lng
+                    );
+                    route.distance += route.distanceFromDepot;
+                    accumulatedTime += (route.distanceFromDepot / avgSpeedKmH) * 60;
+                }
+                
+                route.stops.push(this.copyContainerData(current));
+                const serviceTime = current.isCustomerContainer ? 2 : 0.33;
+                accumulatedTime += serviceTime;
+                route.emptyingTime += serviceTime;
+                
+                if (current.isCustomerContainer) route.customerStops++;
+                else route.standardStops++;
+                
+                // Pokračuj - hledej nejbližší v lokálním okně
+                const localWindow = 30; // Větší okno pro lepší výběr
+                
+                while (unvisited.length > 0) {
+                    let nearest = null;
+                    let minDist = Infinity;
+                    let nearestIdx = -1;
+                    
+                    // Hledej nejbližší v lokálním okně
+                    const searchSize = Math.min(localWindow, unvisited.length);
+                    for (let idx = 0; idx < searchSize; idx++) {
+                        const container = unvisited[idx];
+                        if (!container || !container.lat || !container.lng) continue;
+                        const dist = this.calculateDistance(
+                            current.lat, current.lng,
+                            container.lat, container.lng
+                        );
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearest = container;
+                            nearestIdx = idx;
+                        }
+                    }
+                    
+                    if (!nearest) break;
+                    
+                    const travelTime = (minDist / avgSpeedKmH) * 60;
+                    const nextServiceTime = nearest.isCustomerContainer ? 2 : 0.33;
+                    
+                    // Odhadni čas návratu do depa
+                    let returnTime = 0;
+                    if (this.depot) {
+                        const distToDepot = nearest.distFromDepot || this.calculateDistance(
+                            nearest.lat, nearest.lng,
+                            this.depot.lat, this.depot.lng
+                        );
+                        returnTime = (distToDepot / avgSpeedKmH) * 60;
+                    }
+                    
+                    // PŘÍSNÁ kontrola časového limitu
+                    const projectedTime = accumulatedTime + travelTime + nextServiceTime + returnTime;
+                    
+                    // Rezerva 10% pro nepřesnosti
+                    if (projectedTime > maxDurationMinutes * 0.9) {
+                        console.log(`   ⏱️ Limit ${maxDurationMinutes}min dosažen při ${route.stops.length} zastávkách`);
+                        break;
+                    }
+                    
+                    // Přidej zastávku
+                    route.stops.push(this.copyContainerData(nearest));
+                    route.distance += minDist;
+                    accumulatedTime += travelTime + nextServiceTime;
+                    route.emptyingTime += nextServiceTime;
+                    
+                    if (nearest.isCustomerContainer) route.customerStops++;
+                    else route.standardStops++;
+                    
+                    unvisited.splice(nearestIdx, 1);
+                    current = nearest;
+                }
+                
+                // 2-opt vylepšení
+                if (route.stops.length > 3 && (this.algorithmType === 'balanced' || this.algorithmType === 'quality')) {
+                    route.stops = this.improve2opt(route.stops);
+                }
+                
+                // Dopočítej vzdálenost do depa
+                if (this.depot && route.stops.length > 0) {
+                    const lastStop = route.stops[route.stops.length - 1];
+                    route.distanceToDepot = this.calculateDistance(
+                        lastStop.lat, lastStop.lng,
+                        this.depot.lat, this.depot.lng
+                    );
+                    route.distance += route.distanceToDepot;
+                }
+                
+                // Dopočítej časy
+                route.drivingTime = (route.distance / avgSpeedKmH) * 60;
+                route.totalTime = route.drivingTime + route.emptyingTime;
+                route.estimatedTime = accumulatedTime;
+                
+                return route;
+            }
+            
+            // Jednoduchý NN (fallback)
+            createRouteSimpleNN(unvisited, routeNumber, maxDurationMinutes) {
+                return this.createRouteWithTimeLimit(unvisited, routeNumber, maxDurationMinutes);
+            }
+            
+            // Starý createRouteInSector - přesměrování
+            createRouteInSector(unvisited, routeNumber, maxDurationMinutes) {
+                return this.createRouteWithTimeLimit(unvisited, routeNumber, maxDurationMinutes);
             }
             
             // Varianta 2 s progress barem
